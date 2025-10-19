@@ -1,19 +1,73 @@
-# React + TypeScript + Vite
+# Campaign Latin App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas de pre-calificación para programas de gastos funerarios en EE.UU. con enfoque mobile-first y experiencia visual tipo landing page.
 
-Currently, two official plugins are available:
+## Características principales
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Diseño Sensacionalista y Mobile-First:**
+  - Header con badge inclinado "BREAKING NEWS" y fondo con gradiente rojo-azul.
+  - Footer con disclaimer y enlaces externos (Política de Privacidad, Términos de Servicio).
+  - Layout responsivo usando Tailwind CSS y grid/flex.
 
-## React Compiler
+- **Navegación y Vistas:**
+  - `View1`: Checkpoints de beneficios, botón de avance con icono PointingHand.
+  - `View2`: Pregunta "¿Vives en los Estados Unidos?" con botones Sí/No. Reproduce audio al cargar.
+  - `View3`: Pregunta "¿Tienes más de 40 años?" con botones Sí/No. Reproduce audio al cargar.
+  - `FinalView`: Mensaje de felicitación, botón "Llama Ahora" que redirige a llamada telefónica, información dinámica de espera y agentes, imagen del congreso con blend mode para resaltar.
+  - `NotAble`: Mensaje diplomático si el usuario no califica, sin preguntas, permite cierre manual.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Componentes personalizados:**
+  - `PointingHand`: GIF animado, color blanco, tamaño ajustable, usado en botones principales.
 
-## Expanding the ESLint configuration
+- **Audio:**
+  - Reproducción automática (con delay) en cada vista relevante (`View2`, `View3`, `FinalView`).
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Bloqueo de navegación:**
+  - Deshabilita botones de back/next del navegador en vistas principales para controlar el flujo.
+
+- **Estética mejorada:**
+  - Título "CONGRATULATIONS!" con líneas rojas gradientes y sombra.
+  - Imagen del congreso con blend mode para fondo blanco menos visible.
+
+## Estructura de carpetas
+
+- `/src/components/` - Componentes reutilizables (Layout, PointingHand)
+- `/src/pages/` - Vistas principales (View1, View2, View3, FinalView, NotAble)
+- `/public/audio/` - Audios para cada vista
+- `/public/images/` - Imágenes usadas en el diseño
+
+## Instalación y ejecución
+
+```bash
+npm install
+npm run dev
+```
+
+## Personalización
+- Cambia los textos, audios o imágenes en las carpetas correspondientes.
+- Modifica los parámetros de espera y agentes en `FinalView` para mostrar datos dinámicos.
+
+## Créditos
+Desarrollado por AnthonyLeguis y colaboradores.
+
+---
+
+# Documentación original Vite + React
+
+Este template proporciona una configuración mínima para hacer funcionar React en Vite con HMR y algunas reglas de ESLint.
+
+Actualmente, hay dos plugins oficiales disponibles:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) usa [Babel](https://babeljs.io/) (o [oxc](https://oxc.rs) cuando se usa en [rolldown-vite](https://vite.dev/guide/rolldown)) para Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) usa [SWC](https://swc.rs/) para Fast Refresh
+
+## Compilador de React
+
+El compilador de React no está habilitado en este template debido a su impacto en el rendimiento de desarrollo y construcción. Para añadirlo, consulta [esta documentación](https://react.dev/learn/react-compiler/installation).
+
+## Expandiendo la configuración de ESLint
+
+Si estás desarrollando una aplicación para producción, se recomienda actualizar la configuración para habilitar reglas de linting conscientes del tipo:
 
 ```js
 export default defineConfig([
@@ -21,29 +75,29 @@ export default defineConfig([
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
-      // Other configs...
+      // Otras configuraciones...
 
-      // Remove tseslint.configs.recommended and replace with this
+      // Eliminar tseslint.configs.recommended y reemplazar con esto
       tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
+      // Alternativamente, usa esto para reglas más estrictas
       tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
+      // Opcionalmente, añade esto para reglas estilísticas
       tseslint.configs.stylisticTypeChecked,
 
-      // Other configs...
+      // Otras configuraciones...
     ],
     languageOptions: {
       parserOptions: {
         project: ['./tsconfig.node.json', './tsconfig.app.json'],
         tsconfigRootDir: import.meta.dirname,
       },
-      // other options...
+      // otras opciones...
     },
   },
 ])
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+También puedes instalar [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) y [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) para reglas de linting específicas de React:
 
 ```js
 // eslint.config.js
@@ -55,10 +109,10 @@ export default defineConfig([
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
-      // Other configs...
-      // Enable lint rules for React
+      // Otras configuraciones...
+      // Habilitar reglas de lint para React
       reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
+      // Habilitar reglas de lint para React DOM
       reactDom.configs.recommended,
     ],
     languageOptions: {
@@ -66,7 +120,7 @@ export default defineConfig([
         project: ['./tsconfig.node.json', './tsconfig.app.json'],
         tsconfigRootDir: import.meta.dirname,
       },
-      // other options...
+      // otras opciones...
     },
   },
 ])
