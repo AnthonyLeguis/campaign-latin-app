@@ -21,14 +21,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div
                 className="absolute inset-0 w-full h-full"
                 style={{
-                    background: "linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(185,28,28,0.8))",
+                    background: "linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0.9))",
                     zIndex: 0,
                 }}
             />
 
             <div className="min-h-screen flex-1 flex flex-col sm:w-7/12 mx-auto transition-all duration-300 relative z-10">
                 {/* Header */}
-                <header className="w-full text-white top-0 py-3">
+                <header className="w-full text-gray-100 top-0 py-3">
                     <div className="max-w-2xl mx-auto px-4">
                         {/* Badge de Últimas Noticias */}
                         <div className="flex items-center justify-center gap-0 mb-3 transition-all duration-300">
@@ -58,7 +58,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                             >NEWS</span>
                         </div>
                         {/* Titular Principal */}
-                        <h1 className="font-semibold text-shadow-md text-shadow-gray-950 text-center leading-tight transition-all duration-300 text-sm md:text-medium">
+                        <h1 className="font-bold text-shadow-lg text-shadow-gray-950 text-center leading-tight transition-all duration-300 text-sm md:text-medium">
                             ¡El Congreso ha revelado un inédito esquema regulado que protege con hasta $30,000 los desembolsos relacionados con servicios funerarios!
                         </h1>
                     </div>
@@ -73,7 +73,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <footer className="w-full text-white mt-8 py-6">
                     <div className="max-w-2xl mx-auto px-4">
                         {/* Disclaimer Text */}
-                        <div className="text-justify text-xs leading-relaxed mb-6 border-t border-gray-700 pt-4">
+                        <div className="text-justify text-gray-700 text-xs leading-relaxed mb-6 border-t border-gray-700 pt-4">
                             <p className="mb-3">
                                 We are a marketing company. This Site is part of our marketing efforts for third-parties. The offers that are discussed or appear on our website are from third party advertisers who compensate us. This compensation may impact how and where products appear on our website and the order in which they appear. The compensation that we get may also influence the topic, posts, and content on our Site this website. We do not represent all services or products available on the market. Editorial opinions expressed on the Site are strictly our own, and are not provided, endorsed, or approved by advertisers. We are not affiliated with any third party advertiser other than as stated above. As such, we do not recommend or endorse any product or service on this website. If you are redirected to a third party advertiser's site, you should review their terms and conditions and privacy policy as they may differ significantly from those posted on this site.
                             </p>
@@ -102,7 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                                     Terms of Service
                                 </a>
                             </div>
-                            <p className="text-gray-400 mt-3">© 2025 Protección para la familia. All rights reserved.</p>
+                            <p className="text-gray-700 mt-3">© 2025 Protección para la familia. All rights reserved.</p>
                         </div>
                     </div>
                 </footer>
