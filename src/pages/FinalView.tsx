@@ -50,7 +50,7 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
             <div className="text-center mb-6 px-2 sm:px-4">
                 <p className="text-base sm:text-lg mb-4" style={{ fontFamily: "'Parkinsans', sans-serif", fontStyle: 'italic', fontWeight: 600 }}>
                     <span className="font-black text-xl sm:text-2xl gold-pulse" style={{
-                        background: 'linear-gradient(135deg, #b45309, #d97706, #f59e0b)',
+                        background: 'linear-gradient(135deg, #b45309, #b45309, #d97706)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
                         display: 'inline-block',
