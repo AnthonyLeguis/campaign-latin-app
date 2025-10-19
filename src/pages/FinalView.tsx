@@ -25,14 +25,22 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
     }, []);
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] px-2">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] px-2 w-full max-w-xl mx-auto relative">
             <audio ref={audioRef} src="/audio/final.mp3" preload='auto' />
 
+            {/* Partículas de estrellas */}
+            <div className="sparkle"></div>
+            <div className="sparkle"></div>
+            <div className="sparkle"></div>
+            <div className="sparkle"></div>
+            <div className="sparkle"></div>
+            <div className="sparkle"></div>
+
             {/* Título CONGRATULATIONS */}
-            <div className="w-full mb-6">
-                <div className="bg-gradient-to-r from-transparent via-red-600 to-transparent mb-4"></div>
-                <div className="bg-[#084f63] text-white text-center py-4 sm:py-6 rounded-xl shadow-lg">
-                    <h1 className="text-xl md:text-2xl font-black tracking-wider">CONGRATULATIONS!</h1>
+            <div className="w-full mb-6 congratulations-bounce">
+                <div className="h-1 bg-gradient-to-r from-transparent via-red-600 to-transparent mb-4"></div>
+                <div className="bg-[#084f63] text-white text-center py-4 sm:py-6 rounded-xl shadow-lg float-effect">
+                    <h1 className="text-2xl sm:text-4xl font-black tracking-wider shimmer-text">CONGRATULATIONS!</h1>
                     <div className="h-1 bg-gradient-to-r from-red-500 via-red-600 to-red-500 mt-4 mx-2 sm:mx-4 rounded-full"></div>
                 </div>
                 <div className="h-1 bg-gradient-to-r from-transparent via-red-600 to-transparent mt-4"></div>
@@ -40,19 +48,27 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
 
             {/* Texto principal */}
             <div className="text-center mb-6 px-2 sm:px-4">
-                <p className="text-base sm:text-lg mb-4">
-                    <span className="font-bold">¡Pre calificaste!</span> ¡Llama en este momento para obtener cobertura de gastos funerarios hasta <span className="font-bold text-xl">$30,000</span> aprobados por el Estado!
+                <p className="text-base sm:text-lg mb-4" style={{ fontFamily: "'Parkinsans', sans-serif", fontStyle: 'italic', fontWeight: 600 }}>
+                    <span className="font-black text-xl sm:text-2xl gold-pulse" style={{
+                        background: 'linear-gradient(135deg, #b45309, #d97706, #f59e0b)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        display: 'inline-block',
+                        fontFamily: "'Parkinsans', sans-serif",
+                        fontStyle: 'italic',
+                        fontWeight: 700
+                    }}>¡Pre calificaste!</span> ¡Llama en este momento para obtener cobertura de gastos funerarios hasta <span className="font-bold text-xl">$30,000</span> aprobados por el Estado!
                 </p>
             </div>
 
             {/* Botón de llamada */}
             <a
                 href="tel:+14696944955"
-                className="w-full bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6"
+                className="w-full max-w-xs sm:w-7/12 bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6"
             >
                 <span className="text-lg mr-2 animate-pulse duration-75">📞</span>
                 <div className="flex flex-col items-start">
-                    <span className="text-medium font-bold">Llama Ahora</span>
+                    <span className="text-lg font-bold">Llama Ahora</span>
                 </div>
                 <PointingHand />
             </a>

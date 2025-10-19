@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Parkinsans:wght@300..800&display=swap');
 
 body {
     background-color: #083f51;
@@ -38,4 +39,144 @@ body {
 /* Clase para vistas que salen */
 .view-exit {
     animation: slideOutToLeft 0.4s ease-in forwards;
+}
+
+/* Animaciones para FinalView */
+@keyframes bounceIn {
+    0% {
+        transform: scale(0.3);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    70% {
+        transform: scale(0.9);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes goldPulse {
+
+    0%,
+    100% {
+        text-shadow: 0 0 10px rgba(255, 215, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.6);
+        transform: scale(1);
+    }
+
+    50% {
+        text-shadow: 0 0 20px rgba(255, 215, 0, 1), 0 0 40px rgba(255, 215, 0, 0.8), 0 0 60px rgba(255, 215, 0, 0.6);
+        transform: scale(1.05);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes sparkle {
+
+    0%,
+    100% {
+        opacity: 0;
+        transform: scale(0) rotate(0deg);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1) rotate(180deg);
+    }
+}
+
+/* Clases para efectos */
+.congratulations-bounce {
+    animation: bounceIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.gold-pulse {
+    animation: goldPulse 2s ease-in-out infinite;
+}
+
+.shimmer-text {
+    background: linear-gradient(90deg, #1e40af 0%, #fbbf24 50%, #1e40af 100%);
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+}
+
+.float-effect {
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Partículas de estrellas */
+.sparkle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: radial-gradient(circle, #fbbf24 0%, transparent 70%);
+    border-radius: 50%;
+    animation: sparkle 2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.sparkle:nth-child(1) {
+    top: 10%;
+    left: 20%;
+    animation-delay: 0s;
+}
+
+.sparkle:nth-child(2) {
+    top: 20%;
+    right: 25%;
+    animation-delay: 0.5s;
+}
+
+.sparkle:nth-child(3) {
+    top: 30%;
+    left: 15%;
+    animation-delay: 1s;
+}
+
+.sparkle:nth-child(4) {
+    top: 15%;
+    right: 15%;
+    animation-delay: 1.5s;
+}
+
+.sparkle:nth-child(5) {
+    top: 25%;
+    left: 30%;
+    animation-delay: 0.8s;
+}
+
+.sparkle:nth-child(6) {
+    top: 35%;
+    right: 20%;
+    animation-delay: 1.2s;
 }
