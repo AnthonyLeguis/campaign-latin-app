@@ -21,7 +21,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div
                 className="absolute inset-0 w-full h-full"
                 style={{
-                    background: "linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0.9))",
+                    background: "linear-gradient(to bottom, rgba(185, 28, 28, 0.8), rgba(3, 7, 30, 0.8), rgba(3, 7, 30, 1))",
                     zIndex: 0,
                 }}
             />
