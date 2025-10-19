@@ -4,3 +4,38 @@ body {
     background-color: #083f51;
     color: #111827;
 }
+
+/* Animaciones para las transiciones de vistas */
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutToLeft {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+}
+
+/* Clase para vistas que entran */
+.view-enter {
+    animation: slideInFromRight 0.4s ease-out forwards;
+}
+
+/* Clase para vistas que salen */
+.view-exit {
+    animation: slideOutToLeft 0.4s ease-in forwards;
+}

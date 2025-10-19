@@ -5,19 +5,22 @@ import { View2 } from './pages/View2';
 import { View3 } from './pages/View3';
 import { FinalView } from './pages/FinalView';
 import { NotAble } from './pages/NotAble';
+import { AnimatedRoutes } from './components/AnimatedRoutes';
 
 
 function App() {
 
   return (
     <Layout>
-      <Routes>
-        <Route path="/" element={<View1 />} />
-        <Route path="/view2" element={<View2 />} />
-        <Route path="/view3" element={<View3 />} />
-        <Route path="/final" element={<FinalView />} />
-        <Route path="/no" element={<NotAble />} />
-      </Routes>
+      <AnimatedRoutes>
+        <Routes>
+          <Route path="/" element={<View1 />} />
+          <Route path="/view2" element={<View2 />} />
+          <Route path="/view3" element={<View3 />} />
+          <Route path="/final" element={<FinalView />} />
+          <Route path="/no" element={<NotAble />} />
+        </Routes>
+      </AnimatedRoutes>
     </Layout>
   )
 
