@@ -59,7 +59,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         </div>
                         {/* Titular Principal */}
                         <h1 className="font-semibold text-shadow-md text-shadow-gray-950 text-center leading-tight transition-all duration-300 text-sm md:text-medium">
-                            ¡El Congreso ha revelado un inédito esquema normado que protege con hasta $30,000 los desembolsos relacionados con servicios funerarios!
+                            ¡El Congreso ha revelado un inédito esquema regulado que protege con hasta $30,000 los desembolsos relacionados con servicios funerarios!
                         </h1>
                     </div>
                 </header>
