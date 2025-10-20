@@ -1,13 +1,7 @@
-import { useEffect } from 'react';
+import { useInactivityRedirect } from '../hooks/useInactivityRedirect';
 
 export const NotAble = () => {
-    useEffect(() => {
-        const handlePopState = () => {
-            window.history.pushState(null, '', window.location.pathname);
-        };
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, []);
+    useInactivityRedirect(120000); // 2 minutos
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] px-2">

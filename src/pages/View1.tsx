@@ -1,8 +1,8 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigation } from '../context/NavigationContext'
 import { PointingHand } from '../components/PointingHand'
 
 export const View1 = () => {
-    const navigate = useNavigate();
+    const { navigate } = useNavigation();
 
     return (
         <div className="text-center">
@@ -40,7 +40,7 @@ export const View1 = () => {
                     <span className="text-xl animate-bounce">⬇</span>
                 </div>
                 <button
-                    onClick={() => navigate("/view2")}
+                    onClick={() => navigate("view2")}
                     className="w-full bg-[#084f63] text-white py-2 rounded-md text-lg font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 pl-6"
                 >
                     <span>

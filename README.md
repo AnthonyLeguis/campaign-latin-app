@@ -4,8 +4,16 @@ Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas
 
 ## Características principales
 
+- **SPA pura sin rutas en la URL:**
+  - Navegación y flujo controlados por contexto, sin mostrar rutas en el navegador.
+  - El usuario siempre inicia desde la pantalla principal y no puede saltar pasos ni guardar rutas.
+
+- **Inactividad y seguridad de flujo:**
+  - Si el usuario permanece 2 minutos sin interactuar en una vista, es redirigido automáticamente a la pantalla principal.
+  - No es posible acceder a vistas intermedias directamente desde el navegador.
+
 - **Diseño Sensacionalista y Mobile-First:**
-  - Header con badge inclinado "BREAKING NEWS" y fondo con gradiente rojo-azul.
+  - Header con badge inclinado "BREAKING NEWS" y fondo con gradiente blanco-rojo-azul.
   - Footer con disclaimer y enlaces externos (Política de Privacidad, Términos de Servicio).
   - Layout responsivo usando Tailwind CSS y grid/flex.
 
@@ -13,7 +21,7 @@ Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas
   - `View1`: Checkpoints de beneficios, botón de avance con icono PointingHand.
   - `View2`: Pregunta "¿Vives en los Estados Unidos?" con botones Sí/No. Reproduce audio al cargar.
   - `View3`: Pregunta "¿Tienes más de 40 años?" con botones Sí/No. Reproduce audio al cargar.
-  - `FinalView`: Mensaje de felicitación, botón "Llama Ahora" que redirige a llamada telefónica, información dinámica de espera y agentes, imagen del congreso con blend mode para resaltar.
+  - `FinalView`: Mensaje de felicitación, botón "Llama Ahora" que redirige a llamada telefónica, información dinámica de espera y agentes, imagen del congreso con blend mode para resaltar, animaciones y efectos visuales de celebración.
   - `NotAble`: Mensaje diplomático si el usuario no califica, sin preguntas, permite cierre manual.
 
 - **Componentes personalizados:**
@@ -22,17 +30,19 @@ Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas
 - **Audio:**
   - Reproducción automática (con delay) en cada vista relevante (`View2`, `View3`, `FinalView`).
 
-- **Bloqueo de navegación:**
-  - Deshabilita botones de back/next del navegador en vistas principales para controlar el flujo.
-
-- **Estética mejorada:**
-  - Título "CONGRATULATIONS!" con líneas rojas gradientes y sombra.
+- **Animaciones y estética mejorada:**
+  - Transiciones de entrada/salida entre vistas (slide in/out).
+  - Título "CONGRATULATIONS!" con líneas rojas gradientes, sombra y efecto shimmer.
+  - Texto "¡Pre calificaste!" con gradiente dorado, fuente especial y animación de pulso.
+  - Partículas de estrellas doradas animadas en la vista final.
   - Imagen del congreso con blend mode para fondo blanco menos visible.
 
 ## Estructura de carpetas
 
-- `/src/components/` - Componentes reutilizables (Layout, PointingHand)
+- `/src/components/` - Componentes reutilizables (Layout, PointingHand, ViewContainer)
 - `/src/pages/` - Vistas principales (View1, View2, View3, FinalView, NotAble)
+- `/src/context/` - Contexto de navegación SPA
+- `/src/hooks/` - Hooks personalizados (inactividad)
 - `/public/audio/` - Audios para cada vista
 - `/public/images/` - Imágenes usadas en el diseño
 
@@ -46,6 +56,7 @@ npm run dev
 ## Personalización
 - Cambia los textos, audios o imágenes en las carpetas correspondientes.
 - Modifica los parámetros de espera y agentes en `FinalView` para mostrar datos dinámicos.
+- Puedes ajustar los efectos visuales y animaciones en `index.css`.
 
 ## Créditos
 Desarrollado por AnthonyLeguis y colaboradores.

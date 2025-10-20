@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { NavigationProvider } from './context/NavigationContext'
 import './index.css'
 import App from './App.tsx'
 
@@ -16,16 +16,15 @@ function PreloadAssets() {
       const img = new window.Image();
       img.src = src;
     });
-    // Preload CSS (ya se importa arriba)
   }, []);
   return null;
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <NavigationProvider>
       <PreloadAssets />
       <App />
-    </BrowserRouter>
+    </NavigationProvider>
   </StrictMode>,
 )

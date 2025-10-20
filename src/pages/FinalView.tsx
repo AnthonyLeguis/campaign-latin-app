@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
+import { useInactivityRedirect } from '../hooks/useInactivityRedirect';
 import { PointingHand } from '../components/PointingHand';
 
 export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: number; agentsAvailable?: number } = {}) => {
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    useInactivityRedirect(120000); // 2 minutos
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -14,14 +17,6 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, []);
-
-    useEffect(() => {
-        const handlePopState = () => {
-            window.history.pushState(null, '', window.location.pathname);
-        };
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
     return (
