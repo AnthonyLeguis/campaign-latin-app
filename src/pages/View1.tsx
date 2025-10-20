@@ -51,7 +51,10 @@ export const View1 = () => {
             </div>
 
             <div className="mt-4">
-                <img src="/images/congress.jpg" alt="imagen referencial" className="w-full rounded" />
+                <picture>
+                    <source srcSet="/images/congress.webp" type="image/webp" />
+                    <img src="/images/congress.jpg" alt="imagen referencial" width="800" height="480" className="w-full rounded" />
+                </picture>
             </div>
         </div>
     )

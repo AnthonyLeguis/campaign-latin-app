@@ -83,7 +83,7 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
             {/* Imagen del congreso optimizada para LCP y CLS */}
             <div className="mt-6 p-0 w-full flex justify-center">
                 <img
-                    src="/images/congress.jpg"
+                    src="/images/portrait.png"
                     alt="Congreso de los Estados Unidos, imagen referencial de protección familiar"
                     width="400" height="240"
                     className="w-40 sm:w-60 mx-auto rounded"
