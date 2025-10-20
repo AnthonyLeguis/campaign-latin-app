@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+# Puedes personalizar reglas para bloquear carpetas privadas o de desarrollo
+# Disallow: /admin/
+# Disallow: /private/

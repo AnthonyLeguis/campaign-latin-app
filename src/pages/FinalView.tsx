@@ -80,9 +80,15 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
                 <p className="font-semibold">Agentes disponibles: <span className="text-red-600">{agentsAvailable}</span></p>
             </div>
 
-            {/* Imagen del congreso */}
+            {/* Imagen del congreso optimizada para LCP y CLS */}
             <div className="mt-6 p-0 w-full flex justify-center">
-                <img src="/images/portrait.png" alt="US Capitol" className="w-40 sm:w-60 mx-auto" style={{ mixBlendMode: 'lighten', filter: 'brightness(1.1) contrast(1.2)' }} />
+                <img
+                    src="/images/congress.jpg"
+                    alt="Congreso de los Estados Unidos, imagen referencial de protección familiar"
+                    width="400" height="240"
+                    className="w-40 sm:w-60 mx-auto rounded"
+                    style={{ mixBlendMode: 'lighten', filter: 'brightness(1.1) contrast(1.2)' }}
+                />
             </div>
         </div>
     );
