@@ -5,19 +5,23 @@ Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas
 ## Características principales
 
 - **SPA pura sin rutas en la URL:**
+
   - Navegación y flujo controlados por contexto, sin mostrar rutas en el navegador.
   - El usuario siempre inicia desde la pantalla principal y no puede saltar pasos ni guardar rutas.
 
 - **Inactividad y seguridad de flujo:**
+
   - Si el usuario permanece 2 minutos sin interactuar en una vista, es redirigido automáticamente a la pantalla principal.
   - No es posible acceder a vistas intermedias directamente desde el navegador.
 
 - **Diseño Sensacionalista y Mobile-First:**
+
   - Header con badge inclinado "BREAKING NEWS" y fondo con gradiente blanco-rojo-azul.
   - Footer con disclaimer y enlaces externos (Política de Privacidad, Términos de Servicio).
   - Layout responsivo usando Tailwind CSS y grid/flex.
 
 - **Navegación y Vistas:**
+
   - `View1`: Checkpoints de beneficios, botón de avance con icono PointingHand.
   - `View2`: Pregunta "¿Vives en los Estados Unidos?" con botones Sí/No. Reproduce audio al cargar.
   - `View3`: Pregunta "¿Tienes más de 40 años?" con botones Sí/No. Reproduce audio al cargar.
@@ -25,9 +29,11 @@ Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas
   - `NotAble`: Mensaje diplomático si el usuario no califica, sin preguntas, permite cierre manual.
 
 - **Componentes personalizados:**
+
   - `PointingHand`: GIF animado, color blanco, tamaño ajustable, usado en botones principales.
 
 - **Audio:**
+
   - Reproducción automática (con delay) en cada vista relevante (`View2`, `View3`, `FinalView`).
 
 - **Animaciones y estética mejorada:**
@@ -53,12 +59,43 @@ npm install
 npm run dev
 ```
 
+## Meta Conversions API (CAPI)
+
+- Configura las variables de entorno (ver `.env.example`) con:
+  - `META_PIXEL_ID`: ID de tu píxel.
+  - `META_CAPI_TOKEN`: Access Token de Conversions API.
+  - Opcional: `META_CAPI_TEST_CODE` para validar en **Test Events** y `META_CAPI_PORT` para cambiar el puerto (por defecto 8787).
+- Inicia el servidor que envía los eventos server-side:
+
+```bash
+npm run capi-server
+```
+
+- En paralelo, ejecuta la app (`npm run dev`) y navega al sitio. Cada visita envía un evento `PageView` server-side usando IP/User-Agent para **coincidencias avanzadas**.
+- Para enviar eventos adicionales (por ejemplo tras una conversión) puedes llamar a `sendMetaCapiEvent` desde cualquier componente de React:
+
+```ts
+import { sendMetaCapiEvent } from "../lib/metaCapi"; // ajusta la ruta según tu archivo
+
+sendMetaCapiEvent({
+  eventName: "Lead",
+  customData: {
+    value: 0,
+    currency: "USD",
+  },
+});
+```
+
+- Recuerda mantener el token privado y anunciar en tu política de privacidad que se envían eventos a Meta con CAPI.
+
 ## Personalización
+
 - Cambia los textos, audios o imágenes en las carpetas correspondientes.
 - Modifica los parámetros de espera y agentes en `FinalView` para mostrar datos dinámicos.
 - Puedes ajustar los efectos visuales y animaciones en `index.css`.
 
 ## Créditos
+
 Desarrollado por AnthonyLeguis y colaboradores.
 
 ---
@@ -82,9 +119,9 @@ Si estás desarrollando una aplicación para producción, se recomienda actualiz
 
 ```js
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(["dist"]),
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ["**/*.{ts,tsx}"],
     extends: [
       // Otras configuraciones...
 
@@ -99,40 +136,40 @@ export default defineConfig([
     ],
     languageOptions: {
       parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
         tsconfigRootDir: import.meta.dirname,
       },
       // otras opciones...
     },
   },
-])
+]);
 ```
 
 También puedes instalar [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) y [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) para reglas de linting específicas de React:
 
 ```js
 // eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+import reactX from "eslint-plugin-react-x";
+import reactDom from "eslint-plugin-react-dom";
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(["dist"]),
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ["**/*.{ts,tsx}"],
     extends: [
       // Otras configuraciones...
       // Habilitar reglas de lint para React
-      reactX.configs['recommended-typescript'],
+      reactX.configs["recommended-typescript"],
       // Habilitar reglas de lint para React DOM
       reactDom.configs.recommended,
     ],
     languageOptions: {
       parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
         tsconfigRootDir: import.meta.dirname,
       },
       // otras opciones...
     },
   },
-])
+]);
 ```
