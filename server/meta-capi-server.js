@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 
 const app = express();
-const port = process.env.META_CAPI_PORT ? Number(process.env.META_CAPI_PORT) : 8787;
+const port = process.env.PORT || process.env.META_CAPI_PORT || 8787;
 
 app.use(cors());
 app.use(express.json());

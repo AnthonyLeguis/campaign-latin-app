@@ -5,7 +5,9 @@ type MetaCapiEventPayload = {
   actionSource?: 'website' | string;
 };
 
-const endpoint = '/meta-capi/event';
+const endpoint = import.meta.env.PROD 
+  ? 'https://TU-URL-RENDER.onrender.com/meta-capi/event'
+  : '/meta-capi/event';
 
 export async function sendMetaCapiEvent({
   eventName = 'PageView',
