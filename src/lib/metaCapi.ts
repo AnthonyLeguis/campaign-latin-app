@@ -6,7 +6,7 @@ type MetaCapiEventPayload = {
 };
 
 const endpoint = import.meta.env.PROD 
-  ? 'https://TU-URL-RENDER.onrender.com/meta-capi/event'
+  ? 'https://campaign-latin-app.onrender.com/meta-capi/event'
   : '/meta-capi/event';
 
 export async function sendMetaCapiEvent({
