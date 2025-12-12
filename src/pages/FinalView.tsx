@@ -57,19 +57,19 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
             </div>
 
             {/* Botón de llamada */}
-            <a
-                href="tel:+14696944955"
-                className="w-full max-w-xs sm:w-7/12 bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6"
-            >
-                <span className="text-lg mr-2 animate-pulse duration-75">📞</span>
-                <div className="flex flex-col items-start">
-                    <span className="text-lg font-bold">Llama Ahora</span>
-                </div>
-                <PointingHand />
-            </a>
-            <a href="tel:+14696944955" className='pb-4'>
-                <p className='underline text-red-700 text-sm sm:text-base'>Llama ya: (888)904-4955</p>
-            </a>
+			<a
+				href="tel:+14696637105"
+				className="w-full max-w-xs sm:w-7/12 bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6"
+			>
+				<span className="text-lg mr-2 animate-pulse duration-75">📞</span>
+				<div className="flex flex-col items-start">
+					<span className="text-lg font-bold">Llama Ahora</span>
+				</div>
+				<PointingHand />
+			</a>
+			<a href="tel:+14696637105" className='pb-4'>
+				<p className='underline text-red-700 text-sm sm:text-base'>Llama ya: (888) 904-4955</p>
+			</a>
 
             {/* Información adicional */}
             <div className="text-start text-sm text-gray-600 mb-4 w-full max-w-xs">
