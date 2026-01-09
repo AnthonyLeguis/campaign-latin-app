@@ -11,6 +11,8 @@ app.use(express.json());
 const PIXEL_ID = process.env.META_PIXEL_ID;
 const ACCESS_TOKEN = process.env.META_CAPI_TOKEN;
 const TEST_EVENT_CODE = process.env.META_CAPI_TEST_CODE; // opcional para ambiente de pruebas
+const DEFAULT_CURRENCY = process.env.META_DEFAULT_CURRENCY || 'USD';
+const DEFAULT_LEAD_VALUE = process.env.META_DEFAULT_LEAD_VALUE;
 
 if (!PIXEL_ID) {
     console.warn('[meta-capi-server] META_PIXEL_ID no está definido. Configúralo en tu entorno.');
@@ -38,6 +40,22 @@ app.post('/meta-capi/event', async (req, res) => {
             action_source = 'website'
         } = req.body || {};
 
+        let finalCustomData = (custom_data && typeof custom_data === 'object') ? { ...custom_data } : undefined;
+
+        // Meta recomienda enviar value + currency (divisa) en eventos con valor.
+        // En particular, es común que 'Lead' se configure sin estos campos (y Meta lo marca como warning).
+        if (event_name === 'Lead') {
+            const parsed = DEFAULT_LEAD_VALUE != null && DEFAULT_LEAD_VALUE !== '' ? Number(DEFAULT_LEAD_VALUE) : 0;
+            const safeValue = Number.isFinite(parsed) ? parsed : 0;
+
+            if (!finalCustomData) {
+                finalCustomData = { value: safeValue, currency: DEFAULT_CURRENCY };
+            } else {
+                if (finalCustomData.value == null) finalCustomData.value = safeValue;
+                if (finalCustomData.currency == null) finalCustomData.currency = DEFAULT_CURRENCY;
+            }
+        }
+
         const clientIpHeader = req.headers['x-forwarded-for'];
         const client_ip_address = Array.isArray(clientIpHeader)
             ? clientIpHeader[0]
@@ -51,7 +69,7 @@ app.post('/meta-capi/event', async (req, res) => {
                     event_time: event_time || Math.floor(Date.now() / 1000),
                     event_id,
                     action_source,
-                    custom_data,
+                    custom_data: finalCustomData,
                     user_data: {
                         client_ip_address,
                         client_user_agent,

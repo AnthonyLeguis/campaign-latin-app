@@ -1,9 +1,43 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useInactivityRedirect } from '../hooks/useInactivityRedirect';
 import { PointingHand } from '../components/PointingHand';
+import { sendMetaCapiEvent } from '../lib/metaCapi';
 
 export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: number; agentsAvailable?: number } = {}) => {
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    const trackLead = useCallback(() => {
+        type FbqFn = (
+            command: string,
+            eventName: string,
+            params?: Record<string, unknown>,
+            options?: { eventID?: string }
+        ) => void;
+
+        const currency = (import.meta.env.VITE_META_DEFAULT_CURRENCY as string | undefined) ?? 'USD';
+        const rawValue = import.meta.env.VITE_META_LEAD_VALUE as string | undefined;
+        const value = rawValue != null && rawValue !== '' ? Number(rawValue) : 0;
+
+        const eventId =
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        try {
+            const fbq = (window as unknown as { fbq?: FbqFn } | undefined)?.fbq;
+            if (typeof fbq === 'function') {
+                fbq('track', 'Lead', { value, currency }, { eventID: eventId });
+            }
+        } catch {
+            // No-op: no queremos bloquear la acción del usuario
+        }
+
+        sendMetaCapiEvent({
+            eventName: 'Lead',
+            eventId,
+            customData: { value, currency },
+        });
+    }, []);
 
     useInactivityRedirect(120000); // 2 minutos
 
@@ -59,6 +93,7 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
             {/* Botón de llamada */}
 			<a
 				href="tel:+14696637105"
+                onClick={trackLead}
 				className="w-full max-w-xs sm:w-7/12 bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6"
 			>
 				<span className="text-lg mr-2 animate-pulse duration-75">📞</span>
@@ -67,7 +102,7 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
 				</div>
 				<PointingHand />
 			</a>
-			<a href="tel:+14696637105" className='pb-4'>
+            <a href="tel:+14696637105" onClick={trackLead} className='pb-4'>
 				<p className='underline text-red-700 text-sm sm:text-base'>Llama ya: (888) 904-4955</p>
 			</a>
 

@@ -64,6 +64,9 @@ npm run dev
 - Configura las variables de entorno (ver `.env.example`) con:
   - `META_PIXEL_ID`: ID de tu píxel.
   - `META_CAPI_TOKEN`: Access Token de Conversions API.
+  - Opcional (recomendado para diagnósticos de Meta en `Lead`):
+    - `META_DEFAULT_CURRENCY` (por defecto `USD`)
+    - `META_DEFAULT_LEAD_VALUE` (por defecto `0`)
   - Opcional: `META_CAPI_TEST_CODE` para validar en **Test Events** y `META_CAPI_PORT` para cambiar el puerto (por defecto 8787).
 - Inicia el servidor que envía los eventos server-side:
 
@@ -85,6 +88,14 @@ sendMetaCapiEvent({
   },
 });
 ```
+
+### Pixel (cliente) y defaults
+
+- El evento `Lead` (click en "Llama Ahora") se envía por **Pixel** y también por **CAPI** (deduplicado por `event_id`).
+- Puedes configurar defaults en el cliente (Vite):
+
+  - `VITE_META_DEFAULT_CURRENCY` (por defecto `USD`)
+  - `VITE_META_LEAD_VALUE` (por defecto `0`)
 
 - Recuerda mantener el token privado y anunciar en tu política de privacidad que se envían eventos a Meta con CAPI.
 
