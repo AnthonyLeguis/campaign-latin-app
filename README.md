@@ -92,10 +92,12 @@ sendMetaCapiEvent({
 ### Pixel (cliente) y defaults
 
 - El evento `Lead` (click en "Llama Ahora") se envía por **Pixel** y también por **CAPI** (deduplicado por `event_id`).
-- Puedes configurar defaults en el cliente (Vite):
 
-  - `VITE_META_DEFAULT_CURRENCY` (por defecto `USD`)
-  - `VITE_META_LEAD_VALUE` (por defecto `0`)
+**Nota sobre Hostinger / build estático**
+
+- Si publicas copiando solo la carpeta `dist` a Hostinger (hosting estático), **no existe `.env` en runtime**.
+- En este proyecto el `Lead` del navegador usa defaults hardcodeados: `currency: "USD"` y `value: 0`.
+- Las variables de entorno aplican al **servidor** (CAPI) donde se ejecuta Node (Render/Netlify/etc.), no al sitio estático.
 
 - Recuerda mantener el token privado y anunciar en tu política de privacidad que se envían eventos a Meta con CAPI.
 

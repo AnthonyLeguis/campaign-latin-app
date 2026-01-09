@@ -14,9 +14,8 @@ export const FinalView = ({ waitTime = 30, agentsAvailable = 5 }: { waitTime?: n
             options?: { eventID?: string }
         ) => void;
 
-        const currency = (import.meta.env.VITE_META_DEFAULT_CURRENCY as string | undefined) ?? 'USD';
-        const rawValue = import.meta.env.VITE_META_LEAD_VALUE as string | undefined;
-        const value = rawValue != null && rawValue !== '' ? Number(rawValue) : 0;
+        const currency = 'USD';
+        const value = 0;
 
         const eventId =
             typeof crypto !== 'undefined' && 'randomUUID' in crypto
