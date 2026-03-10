@@ -28,7 +28,11 @@
     }(window, document, 'script',
       'https://connect.facebook.net/en_US/fbevents.js');
     fbq('set', 'autoConfig', false, '733007712924189');
-    fbq('init', '733007712924189');
+    fbq('init', '733007712924189', {
+      em: null,
+      ph: null,
+      external_id: null
+    });
     fbq('track', 'PageView');
   </script>
   <!-- Meta etiqueta para Facebook Business Domain authorized -->
