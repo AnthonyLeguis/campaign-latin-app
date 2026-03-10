@@ -32,8 +32,9 @@ export const FinalView = ({
       .catch((err) => console.error("Error cargando la configuración:", err));
   }, []);
 
-  const trackLead = useCallback((e: React.MouseEvent) => {
-    // Prevenir que el evento se propague y active otros handlers
+  const trackLead = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    // Prevenir comportamiento por defecto y propagación
+    e.preventDefault();
     e.stopPropagation();
 
     // Prevenir envíos duplicados - mínimo 3 segundos entre eventos
@@ -73,6 +74,12 @@ export const FinalView = ({
       eventId,
       customData: { value, currency },
     });
+
+    // Manualmente iniciar la llamada después de enviar el evento
+    const href = e.currentTarget.getAttribute("href");
+    if (href) {
+      window.location.href = href;
+    }
   }, []);
 
   useInactivityRedirect(120000); // 2 minutos
