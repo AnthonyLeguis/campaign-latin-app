@@ -8,6 +8,8 @@ export const FinalView = ({
   agentsAvailable = 5,
 }: { waitTime?: number; agentsAvailable?: number } = {}) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Ref para prevenir envíos duplicados de Lead
+  const lastLeadSentRef = useRef<number>(0);
 
   // 1. NUEVO: Estado para guardar el teléfono (con tus valores originales como respaldo)
   const [phoneConfig, setPhoneConfig] = useState({
@@ -30,7 +32,18 @@ export const FinalView = ({
       .catch((err) => console.error("Error cargando la configuración:", err));
   }, []);
 
-  const trackLead = useCallback(() => {
+  const trackLead = useCallback((e: React.MouseEvent) => {
+    // Prevenir que el evento se propague y active otros handlers
+    e.stopPropagation();
+
+    // Prevenir envíos duplicados - mínimo 3 segundos entre eventos
+    const now = Date.now();
+    if (now - lastLeadSentRef.current < 3000) {
+      console.log("[trackLead] Evento ignorado - duplicado detectado");
+      return;
+    }
+    lastLeadSentRef.current = now;
+
     type FbqFn = (
       command: string,
       eventName: string,
