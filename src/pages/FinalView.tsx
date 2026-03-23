@@ -150,20 +150,20 @@ export const FinalView = ({
         </p>
       </div>
 
-      {/* Un solo enlace de llamada para unificar tracking/evento en ambos elementos visuales */}
+      {/* Botón de llamada principal */}
       <a
         href={`tel:${phoneConfig.raw}`}
         onClick={trackLead}
-        className="w-full flex flex-col items-center pb-4"
+        className="w-full max-w-xs sm:w-7/12 bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6"
       >
-        <div className="w-full max-w-xs sm:w-7/12 bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6">
-          <span className="text-lg mr-2 animate-pulse duration-75">📞</span>
-          <div className="flex flex-col items-start">
-            <span className="text-lg font-bold">Llama Ahora</span>
-          </div>
-          <PointingHand />
+        <div className="flex flex-col items-start">
+          <span className="text-lg font-bold">Llama Ahora</span>
         </div>
+        <PointingHand />
+      </a>
 
+      {/* Enlace secundario de llamada */}
+      <a href={`tel:${phoneConfig.raw}`} onClick={trackLead} className="pb-4">
         <p className="underline text-red-700 text-sm sm:text-base">
           Llama ya: {phoneConfig.display}
         </p>
