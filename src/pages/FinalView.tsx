@@ -145,7 +145,7 @@ export const FinalView = ({
             ¡Pre calificaste!
           </span>{" "}
           ¡Llama en este momento para obtener cobertura de gastos funerarios
-          hasta <span className="font-bold text-xl">$30,000</span> aprobados por
+          hasta <span className="font-bold text-xl">$25,000</span> aprobados por
           el Estado!
         </p>
       </div>
