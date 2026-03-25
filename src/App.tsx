@@ -1,12 +1,12 @@
-import { useNavigation } from './context/NavigationContext';
-import { Layout } from './components/Layout';
-import { View1 } from './pages/View1';
-import { View2 } from './pages/View2';
-import { View3 } from './pages/View3';
-import { FinalView } from './pages/FinalView';
-import { NotAble } from './pages/NotAble';
-import { ViewContainer } from './components/ViewContainer';
-
+import { useNavigation } from "./context/NavigationContext";
+import { Layout } from "./components/Layout";
+import { View1 } from "./pages/View1";
+import { View2 } from "./pages/View2";
+import { View3 } from "./pages/View3";
+import { FinalView } from "./pages/FinalView";
+import { NotAble } from "./pages/NotAble";
+import { LegalView } from "./pages/LegalView";
+import { ViewContainer } from "./components/ViewContainer";
 
 function App() {
   const { currentView } = useNavigation();
@@ -28,9 +28,11 @@ function App() {
       <ViewContainer currentView={currentView} expectedView="no">
         <NotAble />
       </ViewContainer>
+      <ViewContainer currentView={currentView} expectedView="legal">
+        <LegalView />
+      </ViewContainer>
     </Layout>
-  )
-
+  );
 }
 
-export default App
+export default App;
