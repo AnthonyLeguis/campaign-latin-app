@@ -514,6 +514,70 @@ app.post('/meta-capi/attack-online/logs', async (req, res) => {
     }
 });
 
+app.post('/meta-capi/backfill-geolocation', async (req, res) => {
+    if (!hasValidHealthToken(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    try {
+        // Buscar registros sin país o estado
+        const [rows] = await pool.query(
+            `SELECT id, device_ip FROM call_attempts 
+             WHERE country IS NULL OR state_region IS NULL
+             ORDER BY created_at DESC`
+        );
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return res.json({
+                status: 'ok',
+                message: 'No hay registros para actualizar',
+                updated: 0,
+                errors: 0,
+            });
+        }
+
+        let updated = 0;
+        let errors = 0;
+
+        // Procesar cada registro
+        for (const row of rows) {
+            try {
+                const geo = geolocateIp(row.device_ip);
+                await pool.query(
+                    `UPDATE call_attempts SET country = ?, state_region = ? WHERE id = ?`,
+                    [geo.country, geo.state, row.id]
+                );
+                updated++;
+            } catch (err) {
+                errors++;
+                console.error(`[backfill-geolocation] Error actualizando ID ${row.id}:`, err.message);
+            }
+        }
+
+        return res.json({
+            status: 'ok',
+            message: `Backfill completado: ${updated} actualizados, ${errors} errores`,
+            total_found: rows.length,
+            updated,
+            errors,
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error en backfill-geolocation', error);
+        return res.status(502).json({
+            error: 'Backfill failed',
+            details: error?.message || 'Error al actualizar la geolocalización.',
+        });
+    }
+});
+
 app.get('/meta-capi/health', (_req, res) => {
     res.json({ status: 'ok', pixel: !!PIXEL_ID, token: !!ACCESS_TOKEN });
 });
