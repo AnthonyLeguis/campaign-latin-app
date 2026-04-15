@@ -17,6 +17,8 @@ export const FinalView = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Ref para prevenir envíos duplicados de Lead
   const lastLeadSentRef = useRef<number>(0);
+  const [isCallBlocked, setIsCallBlocked] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
 
   // 1. NUEVO: Estado para guardar el teléfono (con tus valores originales como respaldo)
   const [phoneConfig, setPhoneConfig] = useState<PhoneConfig>({
@@ -47,11 +49,53 @@ export const FinalView = ({
       .catch((err) => console.error("Error cargando la configuración:", err));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setIsCheckingStatus(true);
+      try {
+        const visitorId = await getDeviceVisitorId();
+        const response = await fetch(`${META_CAPI_BASE}/call-status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain: window.location.hostname,
+            visitorId,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const body = (await response.json()) as { isBlocked?: boolean };
+        if (!cancelled && body?.isBlocked === true) {
+          setIsCallBlocked(true);
+        }
+      } catch {
+        // Si falla validación previa, dejamos que la validación final ocurra al click.
+      } finally {
+        if (!cancelled) {
+          setIsCheckingStatus(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const trackLead = useCallback(
     async (e: React.MouseEvent<HTMLAnchorElement>) => {
       // Prevenir comportamiento por defecto y propagación
       e.preventDefault();
       e.stopPropagation();
+
+      if (isCallBlocked || isCheckingStatus) {
+        return;
+      }
 
       // Prevenir envíos duplicados - mínimo 3 segundos entre eventos
       const now = Date.now();
@@ -77,7 +121,8 @@ export const FinalView = ({
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
       let destinationNumber = phoneConfig.raw;
-      let allowLead = true;
+      // Modo seguro: solo enviar Lead si el backend lo autoriza explícitamente.
+      let allowLead = false;
 
       try {
         const visitorId = await getDeviceVisitorId();
@@ -99,6 +144,7 @@ export const FinalView = ({
             destinationNumber?: string;
             allowLead?: boolean;
             callDiverted?: boolean;
+            callBlocked?: boolean;
           };
 
           if (
@@ -112,6 +158,11 @@ export const FinalView = ({
             allowLead = body.allowLead;
           } else if (typeof body.callDiverted === "boolean") {
             allowLead = !body.callDiverted;
+          }
+
+          if (body.callBlocked === true || allowLead === false) {
+            setIsCallBlocked(true);
+            return;
           }
         }
       } catch (error) {
@@ -141,7 +192,7 @@ export const FinalView = ({
       // Manualmente iniciar la llamada después de resolver destino
       window.location.href = `tel:${destinationNumber}`;
     },
-    [phoneConfig],
+    [isCallBlocked, isCheckingStatus, phoneConfig],
   );
 
   useInactivityRedirect(120000); // 2 minutos
@@ -214,22 +265,53 @@ export const FinalView = ({
 
       {/* Botón de llamada principal */}
       <a
-        href={`tel:${phoneConfig.raw}`}
+        href={isCallBlocked ? "#" : `tel:${phoneConfig.raw}`}
         onClick={trackLead}
-        className="w-full max-w-xs sm:w-7/12 bg-[#084f63] text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter hover:bg-[#0a5f77] transition-colors cursor-pointer flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6"
+        aria-disabled={isCallBlocked || isCheckingStatus}
+        className={`w-full max-w-xs sm:w-7/12 text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter transition-colors flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6 ${
+          isCallBlocked || isCheckingStatus
+            ? "bg-slate-500 cursor-not-allowed pointer-events-none"
+            : "bg-[#084f63] hover:bg-[#0a5f77] cursor-pointer"
+        }`}
       >
         <div className="flex flex-col items-start">
-          <span className="text-lg font-bold">Llama Ahora</span>
+          <span className="text-lg font-bold">
+            {isCallBlocked ? "Llamada bloqueada" : "Llama Ahora"}
+          </span>
         </div>
         <PointingHand />
       </a>
 
       {/* Enlace secundario de llamada */}
-      <a href={`tel:${phoneConfig.raw}`} onClick={trackLead} className="pb-4">
-        <p className="underline text-red-700 text-sm sm:text-base">
-          Llama ya: {phoneConfig.display}
+      <a
+        href={isCallBlocked ? "#" : `tel:${phoneConfig.raw}`}
+        onClick={trackLead}
+        aria-disabled={isCallBlocked || isCheckingStatus}
+        className={`pb-4 ${
+          isCallBlocked || isCheckingStatus
+            ? "pointer-events-none cursor-not-allowed"
+            : ""
+        }`}
+      >
+        <p
+          className={`text-sm sm:text-base ${
+            isCallBlocked || isCheckingStatus
+              ? "text-slate-500"
+              : "underline text-red-700"
+          }`}
+        >
+          {isCallBlocked
+            ? "Llamadas bloqueadas por seguridad"
+            : `Llama ya: ${phoneConfig.display}`}
         </p>
       </a>
+
+      {isCallBlocked ? (
+        <p className="text-red-700 text-sm font-semibold text-center max-w-xs mb-3">
+          Detectamos actividad repetida en este dispositivo/red. Las llamadas se
+          bloquearon por seguridad.
+        </p>
+      ) : null}
 
       {/* Información adicional */}
       <div className="text-start text-sm text-gray-600 mb-4 w-full max-w-xs">

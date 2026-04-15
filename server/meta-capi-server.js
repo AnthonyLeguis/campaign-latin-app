@@ -280,6 +280,48 @@ app.post('/meta-capi/event', async (req, res) => {
             action_source = 'website'
         } = req.body || {};
 
+        const client_ip_address = getClientIp(req);
+        const client_user_agent = req.get('user-agent');
+
+        if (event_name === 'Lead') {
+            const pool = getDbPool();
+            if (!pool) {
+                return res.status(503).json({
+                    error: 'DB no configurada',
+                    details: 'No se puede validar Lead sin conexión a base de datos.',
+                });
+            }
+
+            try {
+                const [leadAuthRows] = await pool.query(
+                    `SELECT call_diverted, created_at
+                     FROM call_attempts
+                     WHERE device_ip = ?
+                     ORDER BY id DESC
+                     LIMIT 1`,
+                    [client_ip_address]
+                );
+
+                const latestAttempt = Array.isArray(leadAuthRows) ? leadAuthRows[0] : null;
+                const isFreshAttempt = latestAttempt?.created_at
+                    ? (Date.now() - new Date(latestAttempt.created_at).getTime()) <= 2 * 60 * 1000
+                    : false;
+
+                if (!latestAttempt || latestAttempt.call_diverted === 1 || !isFreshAttempt) {
+                    return res.status(403).json({
+                        error: 'Lead blocked',
+                        details: 'Lead rechazado por política anti-abuso.',
+                    });
+                }
+            } catch (dbError) {
+                console.error('[meta-capi-server] Error validando autorización de Lead', dbError);
+                return res.status(502).json({
+                    error: 'Lead validation failed',
+                    details: dbError?.message || 'No se pudo validar autorización de Lead.',
+                });
+            }
+        }
+
         let finalCustomData = (custom_data && typeof custom_data === 'object') ? { ...custom_data } : undefined;
 
         // Meta recomienda enviar value + currency (divisa) en eventos con valor.
@@ -295,9 +337,6 @@ app.post('/meta-capi/event', async (req, res) => {
                 if (finalCustomData.currency == null) finalCustomData.currency = DEFAULT_CURRENCY;
             }
         }
-
-        const client_ip_address = getClientIp(req);
-        const client_user_agent = req.get('user-agent');
 
         const payload = {
             data: [
@@ -337,6 +376,60 @@ app.post('/meta-capi/event', async (req, res) => {
     } catch (error) {
         console.error('[meta-capi-server] Error inesperado', error);
         res.status(500).json({ error: 'Unexpected error', details: error?.message });
+    }
+});
+
+app.post('/meta-capi/call-status', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const domainAttacked = String(req.body?.domain || req.get('origin') || '').trim().toLowerCase();
+    const visitorId = String(req.body?.visitorId || '').trim();
+
+    if (!domainAttacked) {
+        return res.status(400).json({
+            error: 'Parámetros inválidos',
+            details: 'domain es requerido.',
+        });
+    }
+
+    const clientIp = getClientIp(req);
+    const visitorHash = visitorId ? sha256(visitorId) : null;
+
+    try {
+        const params = [domainAttacked, clientIp];
+        let whereByFingerprint = '';
+        if (visitorHash) {
+            whereByFingerprint = ' OR fingerprint_hash = ?';
+            params.push(visitorHash);
+        }
+
+        const [rows] = await pool.query(
+            `SELECT id
+             FROM call_attempts
+             WHERE domain_attacked = ?
+               AND created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
+               AND (device_ip = ?${whereByFingerprint})
+             ORDER BY id DESC
+             LIMIT 1`,
+            params
+        );
+
+        return res.json({
+            status: 'ok',
+            isBlocked: Array.isArray(rows) && rows.length > 0,
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error consultando estado de llamada', error);
+        return res.status(502).json({
+            error: 'DB call status failed',
+            details: error?.message || 'No se pudo consultar estado de llamada.',
+        });
     }
 });
 
@@ -444,7 +537,8 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
     return res.json({
         status: 'ok',
         callDiverted: shouldDivert,
-        destinationNumber,
+        callBlocked: shouldDivert,
+        destinationNumber: shouldDivert ? null : destinationNumber,
         allowLead: !shouldDivert,
         reasonCode,
         geo,
@@ -483,7 +577,6 @@ app.post('/meta-capi/attack-online/logs', async (req, res) => {
              FROM call_attempts
              WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
              GROUP BY domain_attacked, device_ip
-             HAVING COUNT(*) > 1 OR SUM(CASE WHEN call_diverted = 1 THEN 1 ELSE 0 END) > 0
              ORDER BY last_attempt_at DESC
              LIMIT ?`,
             [limit]
@@ -493,7 +586,8 @@ app.post('/meta-capi/attack-online/logs', async (req, res) => {
             `SELECT
                 COUNT(*) AS total_events_week,
                 SUM(CASE WHEN call_diverted = 1 THEN 1 ELSE 0 END) AS total_diverted_week,
-                COUNT(DISTINCT device_ip) AS unique_ips_week
+                COUNT(DISTINCT device_ip) AS unique_ips_week,
+                COUNT(DISTINCT CONCAT(domain_attacked, '|', device_ip)) AS grouped_rows_week
              FROM call_attempts
              WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)`
         );

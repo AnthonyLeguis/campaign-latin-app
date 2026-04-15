@@ -22,6 +22,7 @@ type AttackStats = {
   total_events_week?: number;
   total_diverted_week?: number;
   unique_ips_week?: number;
+  grouped_rows_week?: number;
 };
 
 const defaultAuthConfig: AuthConfig = {
@@ -30,6 +31,7 @@ const defaultAuthConfig: AuthConfig = {
 };
 
 export const AttackOnlineView = () => {
+  const PAGE_SIZE = 20;
   const [config, setConfig] = useState<AuthConfig>(defaultAuthConfig);
   const [user, setUser] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +42,7 @@ export const AttackOnlineView = () => {
   const [rows, setRows] = useState<AttackRow[]>([]);
   const [stats, setStats] = useState<AttackStats>({});
   const [generatedAt, setGeneratedAt] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     // Cargar config de credenciales
@@ -194,6 +197,25 @@ export const AttackOnlineView = () => {
     return dt.toLocaleString();
   }, [generatedAt]);
 
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(rows.length / PAGE_SIZE)),
+    [rows.length],
+  );
+
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return rows.slice(start, start + PAGE_SIZE);
+  }, [currentPage, rows]);
+
+  const attemptsShownInTable = useMemo(
+    () => rows.reduce((acc, row) => acc + Number(row.total_attempts || 0), 0),
+    [rows],
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [rows]);
+
   const handleLogout = useCallback(() => {
     localStorage.removeItem("attack_online_session");
     setIsLoggedIn(false);
@@ -294,6 +316,9 @@ export const AttackOnlineView = () => {
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
             <p className="text-xs uppercase text-slate-400">Eventos semana</p>
             <p className="text-2xl font-bold">{stats.total_events_week ?? 0}</p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Conteo bruto de intentos en 7 dias (tabla call_attempts).
+            </p>
           </div>
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
             <p className="text-xs uppercase text-slate-400">Desviadas semana</p>
@@ -305,6 +330,12 @@ export const AttackOnlineView = () => {
             <p className="text-xs uppercase text-slate-400">IPs unicas</p>
             <p className="text-2xl font-bold">{stats.unique_ips_week ?? 0}</p>
           </div>
+        </div>
+
+        <div className="text-xs text-slate-300">
+          Agrupaciones dominio+IP (semana):{" "}
+          {stats.grouped_rows_week ?? rows.length} | Intentos sumados en tabla:{" "}
+          {attemptsShownInTable}
         </div>
 
         <div className="text-xs text-slate-400">
@@ -328,16 +359,16 @@ export const AttackOnlineView = () => {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {paginatedRows.length === 0 ? (
                 <tr>
                   <td className="p-4 text-slate-400" colSpan={8}>
                     Sin resultados por ahora.
                   </td>
                 </tr>
               ) : (
-                rows.map((row, idx) => (
+                paginatedRows.map((row, idx) => (
                   <tr
-                    key={`${row.device_ip}-${row.domain_attacked}-${idx}`}
+                    key={`${row.device_ip}-${row.domain_attacked}-${currentPage}-${idx}`}
                     className="border-t border-slate-800 hover:bg-slate-800/70"
                   >
                     <td className="p-3">{row.domain_attacked}</td>
@@ -358,6 +389,39 @@ export const AttackOnlineView = () => {
             </tbody>
           </table>
         </div>
+
+        {rows.length > PAGE_SIZE ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
+            <p>
+              Mostrando {(currentPage - 1) * PAGE_SIZE + 1} -{" "}
+              {Math.min(currentPage * PAGE_SIZE, rows.length)} de {rows.length}{" "}
+              filas
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded border border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <span>
+                Pagina {currentPage} de {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded border border-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
