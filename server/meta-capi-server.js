@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import mysql from 'mysql2/promise';
+import crypto from 'crypto';
 
 const app = express();
 const port = process.env.PORT || process.env.META_CAPI_PORT || 8787;
@@ -15,6 +16,8 @@ const TEST_EVENT_CODE = process.env.META_CAPI_TEST_CODE; // opcional para ambien
 const DEFAULT_CURRENCY = process.env.META_DEFAULT_CURRENCY || 'USD';
 const DEFAULT_LEAD_VALUE = process.env.META_DEFAULT_LEAD_VALUE;
 const DB_HEALTH_TOKEN = process.env.DB_HEALTH_TOKEN;
+const ATTACK_ONLINE_USER = process.env.ATTACK_ONLINE_USER || 'admin01';
+const ATTACK_ONLINE_PASSWORD = process.env.ATTACK_ONLINE_PASSWORD || 'leo01';
 
 const DB_CONFIG = {
     host: process.env.DB_HOST,
@@ -64,6 +67,77 @@ function hasValidHealthToken(req) {
 
     const received = req.get('x-health-token');
     return typeof received === 'string' && received === DB_HEALTH_TOKEN;
+}
+
+function hasValidDashboardCredentials(user, password) {
+    return user === ATTACK_ONLINE_USER && password === ATTACK_ONLINE_PASSWORD;
+}
+
+function getClientIp(req) {
+    const clientIpHeader = req.headers['x-forwarded-for'];
+    return Array.isArray(clientIpHeader)
+        ? clientIpHeader[0]
+        : (clientIpHeader?.split(',')[0]?.trim() || req.ip || '0.0.0.0');
+}
+
+function sha256(value) {
+    return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function normalizePhoneNumber(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    const cleaned = value.replace(/[^\d+]/g, '');
+    if (!cleaned) {
+        return '';
+    }
+
+    if (cleaned.startsWith('+')) {
+        return `+${cleaned.slice(1).replace(/\D/g, '')}`;
+    }
+
+    return `+${cleaned.replace(/\D/g, '')}`;
+}
+
+function pickRandom(list) {
+    if (!Array.isArray(list) || list.length === 0) {
+        return '';
+    }
+
+    const idx = Math.floor(Math.random() * list.length);
+    return list[idx];
+}
+
+async function geolocateIp(ipAddress) {
+    if (!ipAddress) {
+        return { country: null, state: null };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+
+    try {
+        const response = await fetch(`https://ipapi.co/${encodeURIComponent(ipAddress)}/json/`, {
+            signal: controller.signal,
+            headers: { 'Accept': 'application/json' },
+        });
+
+        if (!response.ok) {
+            return { country: null, state: null };
+        }
+
+        const data = await response.json();
+        return {
+            country: data?.country_name || null,
+            state: data?.region || null,
+        };
+    } catch {
+        return { country: null, state: null };
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 async function runDbReadCheck() {
@@ -201,10 +275,7 @@ app.post('/meta-capi/event', async (req, res) => {
             }
         }
 
-        const clientIpHeader = req.headers['x-forwarded-for'];
-        const client_ip_address = Array.isArray(clientIpHeader)
-            ? clientIpHeader[0]
-            : (clientIpHeader?.split(',')[0]?.trim() || req.ip);
+        const client_ip_address = getClientIp(req);
         const client_user_agent = req.get('user-agent');
 
         const payload = {
@@ -245,6 +316,180 @@ app.post('/meta-capi/event', async (req, res) => {
     } catch (error) {
         console.error('[meta-capi-server] Error inesperado', error);
         res.status(500).json({ error: 'Unexpected error', details: error?.message });
+    }
+});
+
+app.post('/meta-capi/resolve-call', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const domainAttacked = String(req.body?.domain || req.get('origin') || '').trim().toLowerCase();
+    const realNumber = normalizePhoneNumber(req.body?.realNumber || '');
+    const visitorId = String(req.body?.visitorId || '').trim();
+    const diversionNumbersRaw = Array.isArray(req.body?.diversionNumbers) ? req.body.diversionNumbers : [];
+    const diversionNumbers = diversionNumbersRaw
+        .map((n) => normalizePhoneNumber(n))
+        .filter((n) => Boolean(n && n !== realNumber));
+
+    if (!domainAttacked || !realNumber) {
+        return res.status(400).json({
+            error: 'Parámetros inválidos',
+            details: 'domain y realNumber son requeridos.',
+        });
+    }
+
+    const clientIp = getClientIp(req);
+    const userAgent = req.get('user-agent') || null;
+    const visitorHash = visitorId ? sha256(visitorId) : null;
+    const ipHash = clientIp ? sha256(clientIp) : null;
+
+    let shouldDivert = false;
+    let reasonCode = 'FIRST_ATTEMPT';
+
+    try {
+        const params = [domainAttacked, clientIp];
+        let whereByFingerprint = '';
+        if (visitorHash) {
+            whereByFingerprint = ' OR fingerprint_hash = ?';
+            params.push(visitorHash);
+        }
+
+        const [rows] = await pool.query(
+            `SELECT id
+             FROM call_attempts
+             WHERE domain_attacked = ?
+               AND created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
+               AND (device_ip = ?${whereByFingerprint})
+             ORDER BY id DESC
+             LIMIT 1`,
+            params
+        );
+
+        if (Array.isArray(rows) && rows.length > 0) {
+            shouldDivert = true;
+            reasonCode = visitorHash ? 'REPEAT_IP_OR_DEVICE' : 'REPEAT_IP';
+        }
+    } catch (error) {
+        console.error('[meta-capi-server] Error consultando historial de intentos', error);
+        return res.status(502).json({
+            error: 'DB lookup failed',
+            details: error?.message || 'No se pudo consultar historial de intentos.',
+        });
+    }
+
+    const destinationNumber = shouldDivert
+        ? (pickRandom(diversionNumbers) || realNumber)
+        : realNumber;
+
+    if (shouldDivert && destinationNumber === realNumber) {
+        reasonCode = 'REPEAT_FALLBACK_REAL';
+    }
+
+    const geo = await geolocateIp(clientIp);
+
+    try {
+        await pool.query(
+            `INSERT INTO call_attempts
+                (domain_attacked, device_ip, ip_hash, fingerprint_hash, country, state_region, call_diverted, destination_number, source_number, reason_code, user_agent)
+             VALUES
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                domainAttacked,
+                clientIp,
+                ipHash,
+                visitorHash,
+                geo.country,
+                geo.state,
+                shouldDivert ? 1 : 0,
+                destinationNumber,
+                realNumber,
+                reasonCode,
+                userAgent,
+            ]
+        );
+    } catch (error) {
+        console.error('[meta-capi-server] Error guardando intento de llamada', error);
+        return res.status(502).json({
+            error: 'DB insert failed',
+            details: error?.message || 'No se pudo registrar el intento de llamada.',
+        });
+    }
+
+    return res.json({
+        status: 'ok',
+        callDiverted: shouldDivert,
+        destinationNumber,
+        allowLead: !shouldDivert,
+        reasonCode,
+        geo,
+    });
+});
+
+app.post('/meta-capi/attack-online/logs', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const user = String(req.body?.user || '').trim();
+    const password = String(req.body?.password || '');
+    if (!hasValidDashboardCredentials(user, password)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const limitRaw = Number(req.body?.limit || 200);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 20), 500) : 200;
+
+    try {
+        const [rows] = await pool.query(
+            `SELECT
+                domain_attacked,
+                device_ip,
+                MAX(country) AS country,
+                MAX(state_region) AS state_region,
+                SUM(CASE WHEN call_diverted = 1 THEN 1 ELSE 0 END) AS diverted_count,
+                COUNT(*) AS total_attempts,
+                MAX(created_at) AS last_attempt_at,
+                MAX(reason_code) AS last_reason_code
+             FROM call_attempts
+             WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
+             GROUP BY domain_attacked, device_ip
+             HAVING COUNT(*) > 1 OR SUM(CASE WHEN call_diverted = 1 THEN 1 ELSE 0 END) > 0
+             ORDER BY last_attempt_at DESC
+             LIMIT ?`,
+            [limit]
+        );
+
+        const [statsRows] = await pool.query(
+            `SELECT
+                COUNT(*) AS total_events_week,
+                SUM(CASE WHEN call_diverted = 1 THEN 1 ELSE 0 END) AS total_diverted_week,
+                COUNT(DISTINCT device_ip) AS unique_ips_week
+             FROM call_attempts
+             WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)`
+        );
+
+        return res.json({
+            status: 'ok',
+            generated_at: new Date().toISOString(),
+            total: Array.isArray(rows) ? rows.length : 0,
+            stats: Array.isArray(statsRows) && statsRows[0] ? statsRows[0] : {},
+            rows: Array.isArray(rows) ? rows : [],
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error consultando logs attack-online', error);
+        return res.status(502).json({
+            error: 'DB logs query failed',
+            details: error?.message || 'No se pudieron consultar los logs de ataque.',
+        });
     }
 });
 

@@ -7,9 +7,16 @@ import { FinalView } from "./pages/FinalView";
 import { NotAble } from "./pages/NotAble";
 import { LegalView } from "./pages/LegalView";
 import { ViewContainer } from "./components/ViewContainer";
+import { AttackOnlineView } from "./pages/AttackOnlineView";
 
 function App() {
   const { currentView } = useNavigation();
+  const path =
+    typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
+
+  if (path === "/attack-online") {
+    return <AttackOnlineView />;
+  }
 
   return (
     <Layout>

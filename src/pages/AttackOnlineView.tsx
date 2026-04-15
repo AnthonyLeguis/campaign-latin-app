@@ -1,0 +1,320 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { META_CAPI_BASE } from "../lib/metaCapi";
+
+type AuthConfig = {
+  user: string;
+  password: string;
+};
+
+type AttackRow = {
+  domain_attacked: string;
+  device_ip: string;
+  country: string | null;
+  state_region: string | null;
+  diverted_count: number;
+  total_attempts: number;
+  last_attempt_at: string;
+  last_reason_code: string | null;
+};
+
+type AttackStats = {
+  total_events_week?: number;
+  total_diverted_week?: number;
+  unique_ips_week?: number;
+};
+
+const defaultAuthConfig: AuthConfig = {
+  user: "admin01",
+  password: "leo01",
+};
+
+export const AttackOnlineView = () => {
+  const [config, setConfig] = useState<AuthConfig>(defaultAuthConfig);
+  const [user, setUser] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [pollingEnabled, setPollingEnabled] = useState(true);
+  const [rows, setRows] = useState<AttackRow[]>([]);
+  const [stats, setStats] = useState<AttackStats>({});
+  const [generatedAt, setGeneratedAt] = useState("");
+
+  useEffect(() => {
+    fetch("/attack-online-auth.json")
+      .then((res) => (res.ok ? res.json() : defaultAuthConfig))
+      .then((json) => {
+        const nextConfig: AuthConfig = {
+          user:
+            typeof json?.user === "string" ? json.user : defaultAuthConfig.user,
+          password:
+            typeof json?.password === "string"
+              ? json.password
+              : defaultAuthConfig.password,
+        };
+        setConfig(nextConfig);
+      })
+      .catch(() => {
+        setConfig(defaultAuthConfig);
+      });
+  }, []);
+
+  const fetchLogs = useCallback(
+    async (authUser: string, authPassword: string) => {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const response = await fetch(`${META_CAPI_BASE}/attack-online/logs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user: authUser,
+            password: authPassword,
+            limit: 300,
+          }),
+        });
+
+        const body = await response.json();
+        if (!response.ok) {
+          const message =
+            body?.details || body?.error || "No se pudo cargar los logs.";
+
+          setError(
+            response.status === 404
+              ? "El backend local no tiene la ruta /meta-capi/attack-online/logs activa."
+              : message,
+          );
+          return false;
+        }
+
+        setRows(Array.isArray(body?.rows) ? body.rows : []);
+        setStats((body?.stats || {}) as AttackStats);
+        setGeneratedAt(
+          typeof body?.generated_at === "string" ? body.generated_at : "",
+        );
+        return true;
+      } catch {
+        setError("Error de red cargando logs de ataque.");
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isLoggedIn || !pollingEnabled) {
+      return;
+    }
+
+    let timer: number | undefined;
+    let cancelled = false;
+
+    void (async () => {
+      const ok = await fetchLogs(user, password);
+      if (!ok || cancelled) {
+        setPollingEnabled(false);
+        return;
+      }
+
+      timer = window.setInterval(async () => {
+        const pollOk = await fetchLogs(user, password);
+        if (!pollOk) {
+          setPollingEnabled(false);
+          if (timer) {
+            window.clearInterval(timer);
+          }
+        }
+      }, 15000);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) {
+        window.clearInterval(timer);
+      }
+    };
+  }, [isLoggedIn, pollingEnabled, user, password, fetchLogs]);
+
+  const onSubmit = useCallback(
+    (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+
+      if (user === config.user && password === config.password) {
+        setIsLoggedIn(true);
+        setPollingEnabled(true);
+        setError("");
+        return;
+      }
+
+      setIsLoggedIn(false);
+      setError("Credenciales incorrectas.");
+    },
+    [config, fetchLogs, user, password],
+  );
+
+  const lastUpdate = useMemo(() => {
+    if (!generatedAt) {
+      return "-";
+    }
+
+    const dt = new Date(generatedAt);
+    if (Number.isNaN(dt.getTime())) {
+      return generatedAt;
+    }
+
+    return dt.toLocaleString();
+  }, [generatedAt]);
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center px-4">
+        <form
+          onSubmit={onSubmit}
+          className="w-full max-w-md bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 space-y-4"
+        >
+          <h1 className="text-2xl font-bold tracking-tight">Attack-online</h1>
+          <p className="text-sm text-slate-300">
+            Acceso restringido al panel de monitoreo de intentos repetidos.
+          </p>
+
+          <div>
+            <label className="text-sm text-slate-200 block mb-1">Usuario</label>
+            <input
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              className="w-full rounded-md bg-slate-900 border border-slate-600 px-3 py-2 text-sm"
+              autoComplete="off"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-slate-200 block mb-1">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-md bg-slate-900 border border-slate-600 px-3 py-2 text-sm"
+              autoComplete="off"
+              required
+            />
+          </div>
+
+          {error ? <p className="text-red-400 text-sm">{error}</p> : null}
+
+          <button
+            type="submit"
+            className="w-full bg-cyan-600 hover:bg-cyan-500 transition-colors rounded-md py-2 font-semibold"
+          >
+            Entrar al panel
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-100 px-4 py-6">
+      <div className="max-w-7xl mx-auto space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl md:text-3xl font-bold">
+            Attack-online console
+          </h1>
+          <button
+            type="button"
+            onClick={async () => {
+              const ok = await fetchLogs(user, password);
+              if (ok) {
+                setPollingEnabled(true);
+              }
+            }}
+            className="bg-cyan-600 hover:bg-cyan-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
+          >
+            {isLoading
+              ? "Actualizando..."
+              : pollingEnabled
+                ? "Actualizar"
+                : "Reintentar"}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+            <p className="text-xs uppercase text-slate-400">Eventos semana</p>
+            <p className="text-2xl font-bold">{stats.total_events_week ?? 0}</p>
+          </div>
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+            <p className="text-xs uppercase text-slate-400">Desviadas semana</p>
+            <p className="text-2xl font-bold">
+              {stats.total_diverted_week ?? 0}
+            </p>
+          </div>
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+            <p className="text-xs uppercase text-slate-400">IPs unicas</p>
+            <p className="text-2xl font-bold">{stats.unique_ips_week ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="text-xs text-slate-400">
+          Ultima actualizacion: {lastUpdate}
+        </div>
+
+        {error ? <p className="text-red-400 text-sm">{error}</p> : null}
+
+        <div className="overflow-x-auto border border-slate-700 rounded-lg">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-800 text-slate-300">
+              <tr>
+                <th className="text-left p-3">Dominio</th>
+                <th className="text-left p-3">IP</th>
+                <th className="text-left p-3">Pais</th>
+                <th className="text-left p-3">Estado</th>
+                <th className="text-left p-3">Intentos</th>
+                <th className="text-left p-3">Desvios</th>
+                <th className="text-left p-3">Ultimo motivo</th>
+                <th className="text-left p-3">Ultimo intento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td className="p-4 text-slate-400" colSpan={8}>
+                    Sin resultados por ahora.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row, idx) => (
+                  <tr
+                    key={`${row.device_ip}-${row.domain_attacked}-${idx}`}
+                    className="border-t border-slate-800 hover:bg-slate-800/70"
+                  >
+                    <td className="p-3">{row.domain_attacked}</td>
+                    <td className="p-3 font-mono">{row.device_ip}</td>
+                    <td className="p-3">{row.country || "-"}</td>
+                    <td className="p-3">{row.state_region || "-"}</td>
+                    <td className="p-3">{row.total_attempts}</td>
+                    <td className="p-3">{row.diverted_count}</td>
+                    <td className="p-3">{row.last_reason_code || "-"}</td>
+                    <td className="p-3">
+                      {row.last_attempt_at
+                        ? new Date(row.last_attempt_at).toLocaleString()
+                        : "-"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AttackOnlineView;

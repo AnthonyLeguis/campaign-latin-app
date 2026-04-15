@@ -1,15 +1,15 @@
-import { useEffect } from 'react';
-import { sendMetaCapiEvent } from '../lib/metaCapi';
+import { useEffect } from "react";
+import { sendMetaCapiEvent } from "../lib/metaCapi";
 
 export const PreloadAssets = () => {
   useEffect(() => {
     const images = [
-      '/images/map.svg',
-      '/images/congress.jpg',
-      '/images/portrait.png',
-      '/images/hand.gif',
+      "/images/map.svg",
+      "/images/congress.jpg",
+      "/images/portrait.png",
+      "/images/hand.gif",
     ];
-    images.forEach(src => {
+    images.forEach((src) => {
       const img = new window.Image();
       img.src = src;
     });
@@ -19,7 +19,14 @@ export const PreloadAssets = () => {
 
 export const MetaCapiSync = () => {
   useEffect(() => {
-    sendMetaCapiEvent({ eventName: 'PageView' });
+    if (
+      typeof window !== "undefined" &&
+      window.location.pathname.toLowerCase() === "/attack-online"
+    ) {
+      return;
+    }
+
+    sendMetaCapiEvent({ eventName: "PageView" });
   }, []);
   return null;
 };

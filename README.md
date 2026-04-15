@@ -128,6 +128,20 @@ curl -X POST "https://TU-SERVICIO.onrender.com/meta-capi/health-db/write-test" \
 
 Si ambos responden `status: ok`, la DB está conectada correctamente y lista para la siguiente etapa.
 
+## Panel Attack-online
+
+- Ruta fuera del flujo principal: `/Attack-online`
+- Login fijo (configurable): `public/attack-online-auth.json`
+- Fuente de datos: `POST /meta-capi/attack-online/logs`
+- Auto refresh: cada 15 segundos
+
+### Variables recomendadas en Render para este panel
+
+- `ATTACK_ONLINE_USER` (por defecto `admin01`)
+- `ATTACK_ONLINE_PASSWORD` (por defecto `leo01`)
+
+Nota: aunque el frontend permite login por JSON para esta fase, la validacion final del acceso a logs se hace en backend.
+
 ## Personalización
 
 - Cambia los textos, audios o imágenes en las carpetas correspondientes.

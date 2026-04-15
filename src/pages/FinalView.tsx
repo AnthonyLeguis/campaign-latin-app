@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react"; // ¡Añadido useState!
 import { useInactivityRedirect } from "../hooks/useInactivityRedirect";
 import { PointingHand } from "../components/PointingHand";
-import { sendMetaCapiEvent } from "../lib/metaCapi";
+import { META_CAPI_BASE, sendMetaCapiEvent } from "../lib/metaCapi";
+import { getDeviceVisitorId } from "../lib/deviceFingerprint";
+
+type PhoneConfig = {
+  raw: string;
+  display: string;
+  diversionNumbers: string[];
+};
 
 export const FinalView = ({
   waitTime = 30,
@@ -12,9 +19,10 @@ export const FinalView = ({
   const lastLeadSentRef = useRef<number>(0);
 
   // 1. NUEVO: Estado para guardar el teléfono (con tus valores originales como respaldo)
-  const [phoneConfig, setPhoneConfig] = useState({
+  const [phoneConfig, setPhoneConfig] = useState<PhoneConfig>({
     raw: "+14696637105",
     display: "(888) 904-4955",
+    diversionNumbers: [],
   });
 
   // 2. NUEVO: Leer el archivo config.json al cargar el componente
@@ -23,64 +31,118 @@ export const FinalView = ({
       .then((res) => res.json())
       .then((data) => {
         if (data.phoneRaw && data.phoneDisplay) {
+          const diversionNumbers = Array.isArray(data.diversionNumbers)
+            ? data.diversionNumbers.filter(
+                (n: unknown) => typeof n === "string",
+              )
+            : [];
+
           setPhoneConfig({
             raw: data.phoneRaw,
             display: data.phoneDisplay,
+            diversionNumbers,
           });
         }
       })
       .catch((err) => console.error("Error cargando la configuración:", err));
   }, []);
 
-  const trackLead = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    // Prevenir comportamiento por defecto y propagación
-    e.preventDefault();
-    e.stopPropagation();
+  const trackLead = useCallback(
+    async (e: React.MouseEvent<HTMLAnchorElement>) => {
+      // Prevenir comportamiento por defecto y propagación
+      e.preventDefault();
+      e.stopPropagation();
 
-    // Prevenir envíos duplicados - mínimo 3 segundos entre eventos
-    const now = Date.now();
-    if (now - lastLeadSentRef.current < 3000) {
-      console.log("[trackLead] Evento ignorado - duplicado detectado");
-      return;
-    }
-    lastLeadSentRef.current = now;
-
-    type FbqFn = (
-      command: string,
-      eventName: string,
-      params?: Record<string, unknown>,
-      options?: { eventID?: string },
-    ) => void;
-
-    const currency = "USD";
-    const value = 0;
-
-    const eventId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-    try {
-      const fbq = (window as unknown as { fbq?: FbqFn } | undefined)?.fbq;
-      if (typeof fbq === "function") {
-        fbq("track", "Lead", { value, currency }, { eventID: eventId });
+      // Prevenir envíos duplicados - mínimo 3 segundos entre eventos
+      const now = Date.now();
+      if (now - lastLeadSentRef.current < 3000) {
+        console.log("[trackLead] Evento ignorado - duplicado detectado");
+        return;
       }
-    } catch {
-      // No-op: no queremos bloquear la acción del usuario
-    }
+      lastLeadSentRef.current = now;
 
-    sendMetaCapiEvent({
-      eventName: "Lead",
-      eventId,
-      customData: { value, currency },
-    });
+      type FbqFn = (
+        command: string,
+        eventName: string,
+        params?: Record<string, unknown>,
+        options?: { eventID?: string },
+      ) => void;
 
-    // Manualmente iniciar la llamada después de enviar el evento
-    const href = e.currentTarget.getAttribute("href");
-    if (href) {
-      window.location.href = href;
-    }
-  }, []);
+      const currency = "USD";
+      const value = 0;
+
+      const eventId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      let destinationNumber = phoneConfig.raw;
+      let allowLead = true;
+
+      try {
+        const visitorId = await getDeviceVisitorId();
+
+        const response = await fetch(`${META_CAPI_BASE}/resolve-call`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain: window.location.hostname,
+            realNumber: phoneConfig.raw,
+            diversionNumbers: phoneConfig.diversionNumbers,
+            visitorId,
+            eventId,
+          }),
+        });
+
+        if (response.ok) {
+          const body = (await response.json()) as {
+            destinationNumber?: string;
+            allowLead?: boolean;
+            callDiverted?: boolean;
+          };
+
+          if (
+            typeof body.destinationNumber === "string" &&
+            body.destinationNumber
+          ) {
+            destinationNumber = body.destinationNumber;
+          }
+
+          if (typeof body.allowLead === "boolean") {
+            allowLead = body.allowLead;
+          } else if (typeof body.callDiverted === "boolean") {
+            allowLead = !body.callDiverted;
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "[trackLead] No se pudo resolver desvío de llamada:",
+          error,
+        );
+      }
+
+      if (allowLead) {
+        try {
+          const fbq = (window as unknown as { fbq?: FbqFn } | undefined)?.fbq;
+          if (typeof fbq === "function") {
+            fbq("track", "Lead", { value, currency }, { eventID: eventId });
+          }
+        } catch {
+          // No-op: no queremos bloquear la acción del usuario
+        }
+
+        sendMetaCapiEvent({
+          eventName: "Lead",
+          eventId,
+          customData: { value, currency },
+        });
+      }
+
+      // Manualmente iniciar la llamada después de resolver destino
+      window.location.href = `tel:${destinationNumber}`;
+    },
+    [phoneConfig],
+  );
 
   useInactivityRedirect(120000); // 2 minutos
 

@@ -12,6 +12,7 @@
     "start": "node server/meta-capi-server.js"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^5.2.0",
     "@tailwindcss/vite": "^4.1.14",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
