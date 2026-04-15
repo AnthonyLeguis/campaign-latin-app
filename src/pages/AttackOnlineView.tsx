@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { META_CAPI_BASE } from "../lib/metaCapi";
 
@@ -43,6 +43,10 @@ export const AttackOnlineView = () => {
   const [stats, setStats] = useState<AttackStats>({});
   const [generatedAt, setGeneratedAt] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [syncStatus, setSyncStatus] = useState<
+    "idle" | "updated" | "no-changes"
+  >("idle");
+  const rowsFingerprintRef = useRef("");
 
   useEffect(() => {
     // Cargar config de credenciales
@@ -84,9 +88,16 @@ export const AttackOnlineView = () => {
   }, []);
 
   const fetchLogs = useCallback(
-    async (authUser: string, authPassword: string) => {
-      setIsLoading(true);
-      setError("");
+    async (
+      authUser: string,
+      authPassword: string,
+      options?: { silent?: boolean },
+    ) => {
+      const silent = options?.silent === true;
+      if (!silent) {
+        setIsLoading(true);
+        setError("");
+      }
 
       try {
         const response = await fetch(`${META_CAPI_BASE}/attack-online/logs`, {
@@ -112,7 +123,17 @@ export const AttackOnlineView = () => {
           return false;
         }
 
-        setRows(Array.isArray(body?.rows) ? body.rows : []);
+        const incomingRows = Array.isArray(body?.rows) ? body.rows : [];
+        const incomingFingerprint = JSON.stringify(incomingRows);
+
+        if (incomingFingerprint !== rowsFingerprintRef.current) {
+          rowsFingerprintRef.current = incomingFingerprint;
+          setRows(incomingRows);
+          setSyncStatus("updated");
+        } else {
+          setSyncStatus("no-changes");
+        }
+
         setStats((body?.stats || {}) as AttackStats);
         setGeneratedAt(
           typeof body?.generated_at === "string" ? body.generated_at : "",
@@ -122,7 +143,9 @@ export const AttackOnlineView = () => {
         setError("Error de red cargando logs de ataque.");
         return false;
       } finally {
-        setIsLoading(false);
+        if (!silent) {
+          setIsLoading(false);
+        }
       }
     },
     [],
@@ -144,7 +167,7 @@ export const AttackOnlineView = () => {
       }
 
       timer = window.setInterval(async () => {
-        const pollOk = await fetchLogs(user, password);
+        const pollOk = await fetchLogs(user, password, { silent: true });
         if (!pollOk) {
           setPollingEnabled(false);
           if (timer) {
@@ -213,8 +236,8 @@ export const AttackOnlineView = () => {
   );
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [rows]);
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem("attack_online_session");
@@ -340,6 +363,20 @@ export const AttackOnlineView = () => {
 
         <div className="text-xs text-slate-400">
           Ultima actualizacion: {lastUpdate}
+        </div>
+
+        <div className="text-xs text-slate-400">
+          Estado de sincronizacion:{" "}
+          {syncStatus === "updated"
+            ? "datos actualizados"
+            : syncStatus === "no-changes"
+              ? "sin cambios"
+              : "en espera"}
+        </div>
+
+        <div className="text-xs text-slate-400">
+          Ubicacion aproximada por IP/GPS. Puede variar por enrute del operador
+          o por VPN.
         </div>
 
         {error ? <p className="text-red-400 text-sm">{error}</p> : null}

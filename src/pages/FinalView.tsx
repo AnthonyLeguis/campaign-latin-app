@@ -49,6 +49,51 @@ export const FinalView = ({
       .catch((err) => console.error("Error cargando la configuración:", err));
   }, []);
 
+  const getGeoHint = useCallback(async () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      return null;
+    }
+
+    return await new Promise<{
+      lat: number;
+      lon: number;
+      accuracy: number;
+    } | null>((resolve) => {
+      let finished = false;
+
+      const done = (
+        value: { lat: number; lon: number; accuracy: number } | null,
+      ) => {
+        if (!finished) {
+          finished = true;
+          resolve(value);
+        }
+      };
+
+      const timeout = window.setTimeout(() => done(null), 1800);
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          window.clearTimeout(timeout);
+          done({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            accuracy: Math.round(pos.coords.accuracy || 0),
+          });
+        },
+        () => {
+          window.clearTimeout(timeout);
+          done(null);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 1500,
+          maximumAge: 5 * 60 * 1000,
+        },
+      );
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -56,12 +101,25 @@ export const FinalView = ({
       setIsCheckingStatus(true);
       try {
         const visitorId = await getDeviceVisitorId();
+        const geoHint = await getGeoHint();
+
+        void fetch(`${META_CAPI_BASE}/session-geo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain: window.location.hostname,
+            visitorId,
+            geoHint,
+          }),
+        }).catch(() => undefined);
+
         const response = await fetch(`${META_CAPI_BASE}/call-status`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             domain: window.location.hostname,
             visitorId,
+            geoHint,
           }),
         });
 
@@ -126,6 +184,7 @@ export const FinalView = ({
 
       try {
         const visitorId = await getDeviceVisitorId();
+        const geoHint = await getGeoHint();
 
         const response = await fetch(`${META_CAPI_BASE}/resolve-call`, {
           method: "POST",
@@ -136,6 +195,7 @@ export const FinalView = ({
             diversionNumbers: phoneConfig.diversionNumbers,
             visitorId,
             eventId,
+            geoHint,
           }),
         });
 
@@ -192,7 +252,7 @@ export const FinalView = ({
       // Manualmente iniciar la llamada después de resolver destino
       window.location.href = `tel:${destinationNumber}`;
     },
-    [isCallBlocked, isCheckingStatus, phoneConfig],
+    [getGeoHint, isCallBlocked, isCheckingStatus, phoneConfig],
   );
 
   useInactivityRedirect(120000); // 2 minutos

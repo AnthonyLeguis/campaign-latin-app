@@ -149,16 +149,148 @@ function geolocateIp(ipAddress) {
     try {
         const geo = geoip.lookup(normalizedIp);
         if (!geo) {
-            return { country: null, state: null };
+            return { country: null, state: null, source: 'ip_lookup' };
         }
 
         const country = geo.country || null;
-        const state = geo.timezone ? geo.timezone.split('/')[1] || null : null;
+        const state = geo.region || geo.city || null;
 
-        return { country, state };
+        return { country, state, source: 'ip_lookup' };
     } catch (error) {
-        return { country: null, state: null };
+        return { country: null, state: null, source: 'ip_lookup' };
     }
+}
+
+function normalizeGeoHint(rawGeoHint) {
+    if (!rawGeoHint || typeof rawGeoHint !== 'object') {
+        return null;
+    }
+
+    const lat = Number(rawGeoHint.lat);
+    const lon = Number(rawGeoHint.lon);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return null;
+    }
+
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        return null;
+    }
+
+    return { lat, lon };
+}
+
+async function geolocateByCoordinates(rawGeoHint) {
+    const geoHint = normalizeGeoHint(rawGeoHint);
+    if (!geoHint) {
+        return null;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2200);
+
+    try {
+        const query = new URLSearchParams({
+            format: 'jsonv2',
+            lat: String(geoHint.lat),
+            lon: String(geoHint.lon),
+            zoom: '10',
+            addressdetails: '1',
+        });
+
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query.toString()}`, {
+            signal: controller.signal,
+            headers: {
+                Accept: 'application/json',
+                'User-Agent': 'campaign-latin-app/1.0',
+            },
+        });
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const data = await response.json();
+        const address = data?.address || {};
+        const country = typeof address?.country_code === 'string'
+            ? address.country_code.toUpperCase()
+            : (address?.country || null);
+        const state =
+            address?.state ||
+            address?.region ||
+            address?.state_district ||
+            address?.county ||
+            address?.city ||
+            null;
+
+        if (!country && !state) {
+            return null;
+        }
+
+        return {
+            country: country || null,
+            state: state || null,
+            source: 'device_geolocation',
+        };
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function resolveGeolocation(ipAddress, rawGeoHint) {
+    const preciseGeo = await geolocateByCoordinates(rawGeoHint);
+    if (preciseGeo) {
+        return preciseGeo;
+    }
+
+    return geolocateIp(ipAddress);
+}
+
+async function updateLatestAttemptGeo(pool, { domainAttacked, clientIp, visitorHash, geo }) {
+    if (!geo || (!geo.country && !geo.state)) {
+        return { updated: 0 };
+    }
+
+    const params = [domainAttacked, clientIp];
+    let whereByFingerprint = '';
+    if (visitorHash) {
+        whereByFingerprint = ' OR fingerprint_hash = ?';
+        params.push(visitorHash);
+    }
+
+    const [rows] = await pool.query(
+        `SELECT id, country, state_region
+         FROM call_attempts
+         WHERE domain_attacked = ?
+           AND created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
+           AND (device_ip = ?${whereByFingerprint})
+         ORDER BY id DESC
+         LIMIT 1`,
+        params
+    );
+
+    const latest = Array.isArray(rows) ? rows[0] : null;
+    if (!latest) {
+        return { updated: 0 };
+    }
+
+    const country = geo.country || latest.country || null;
+    const state = geo.state || latest.state_region || null;
+
+    if (country === latest.country && state === latest.state_region) {
+        return { updated: 0 };
+    }
+
+    await pool.query(
+        `UPDATE call_attempts
+         SET country = ?, state_region = ?
+         WHERE id = ?`,
+        [country, state, latest.id]
+    );
+
+    return { updated: 1 };
 }
 
 async function runDbReadCheck() {
@@ -504,7 +636,7 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
         reasonCode = 'REPEAT_FALLBACK_REAL';
     }
 
-    const geo = geolocateIp(clientIp);
+    const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
 
     try {
         await pool.query(
@@ -542,6 +674,7 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
         allowLead: !shouldDivert,
         reasonCode,
         geo,
+        geoSource: geo?.source || 'ip_lookup',
     });
 });
 
@@ -604,6 +737,52 @@ app.post('/meta-capi/attack-online/logs', async (req, res) => {
         return res.status(502).json({
             error: 'DB logs query failed',
             details: error?.message || 'No se pudieron consultar los logs de ataque.',
+        });
+    }
+});
+
+app.post('/meta-capi/session-geo', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const domainAttacked = String(req.body?.domain || req.get('origin') || '').trim().toLowerCase();
+    const visitorId = String(req.body?.visitorId || '').trim();
+
+    if (!domainAttacked) {
+        return res.status(400).json({
+            error: 'Parámetros inválidos',
+            details: 'domain es requerido.',
+        });
+    }
+
+    const clientIp = getClientIp(req);
+    const visitorHash = visitorId ? sha256(visitorId) : null;
+    const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
+
+    try {
+        const result = await updateLatestAttemptGeo(pool, {
+            domainAttacked,
+            clientIp,
+            visitorHash,
+            geo,
+        });
+
+        return res.json({
+            status: 'ok',
+            updated: result.updated,
+            geo,
+            geoSource: geo?.source || 'ip_lookup',
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error guardando geo de sesión', error);
+        return res.status(502).json({
+            error: 'Session geo failed',
+            details: error?.message || 'No se pudo guardar la geolocalización de sesión.',
         });
     }
 });
