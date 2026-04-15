@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import mysql from 'mysql2/promise';
 import crypto from 'crypto';
+import geoip from 'geoip-lite';
 
 const app = express();
 const port = process.env.PORT || process.env.META_CAPI_PORT || 8787;
@@ -134,7 +135,7 @@ function pickRandom(list) {
     return list[idx];
 }
 
-async function geolocateIp(ipAddress) {
+function geolocateIp(ipAddress) {
     const normalizedIp = normalizeIp(ipAddress);
 
     if (!normalizedIp || normalizedIp === '0.0.0.0') {
@@ -145,56 +146,19 @@ async function geolocateIp(ipAddress) {
         return { country: null, state: null };
     }
 
-    async function fetchJson(url) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2500);
-
-        try {
-            const response = await fetch(url, {
-                signal: controller.signal,
-                headers: { 'Accept': 'application/json' },
-            });
-
-            if (!response.ok) {
-                return null;
-            }
-
-            return await response.json();
-        } catch {
-            return null;
-        } finally {
-            clearTimeout(timeout);
+    try {
+        const geo = geoip.lookup(normalizedIp);
+        if (!geo) {
+            return { country: null, state: null };
         }
-    }
 
-    const ipapiData = await fetchJson(`https://ipapi.co/${encodeURIComponent(normalizedIp)}/json/`);
-    if (ipapiData?.country_name || ipapiData?.region) {
-        return {
-            country: ipapiData.country_name || null,
-            state: ipapiData.region || null,
-        };
-    }
+        const country = geo.country || null;
+        const state = geo.timezone ? geo.timezone.split('/')[1] || null : null;
 
-    const ipwhoisData = await fetchJson(`https://ipwho.is/${encodeURIComponent(normalizedIp)}`);
-    if (ipwhoisData?.success === true && (ipwhoisData?.country || ipwhoisData?.region)) {
-        return {
-            country: ipwhoisData.country || null,
-            state: ipwhoisData.region || null,
-        };
+        return { country, state };
+    } catch (error) {
+        return { country: null, state: null };
     }
-
-    const ipinfoToken = process.env.IPINFO_TOKEN;
-    if (ipinfoToken) {
-        const ipinfoData = await fetchJson(`https://ipinfo.io/${encodeURIComponent(normalizedIp)}?token=${encodeURIComponent(ipinfoToken)}`);
-        if (ipinfoData?.country || ipinfoData?.region) {
-            return {
-                country: ipinfoData.country || null,
-                state: ipinfoData.region || null,
-            };
-        }
-    }
-
-    return { country: null, state: null };
 }
 
 async function runDbReadCheck() {
@@ -447,7 +411,7 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
         reasonCode = 'REPEAT_FALLBACK_REAL';
     }
 
-    const geo = await geolocateIp(clientIp);
+    const geo = geolocateIp(clientIp);
 
     try {
         await pool.query(
