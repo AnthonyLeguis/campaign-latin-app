@@ -293,6 +293,33 @@ async function updateLatestAttemptGeo(pool, { domainAttacked, clientIp, visitorH
     return { updated: 1 };
 }
 
+async function insertBlockedEntry(pool, {
+    domainAttacked,
+    clientIp,
+    visitorHash,
+    geo,
+    userAgent,
+}) {
+    const ipHash = clientIp ? sha256(clientIp) : null;
+
+    await pool.query(
+        `INSERT INTO call_attempts
+            (domain_attacked, device_ip, ip_hash, fingerprint_hash, country, state_region, call_diverted, reason_code, user_agent)
+         VALUES
+            (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        [
+            domainAttacked,
+            clientIp,
+            ipHash,
+            visitorHash,
+            geo?.country || null,
+            geo?.state || null,
+            'BLOCKED_ON_ENTRY',
+            userAgent || null,
+        ]
+    );
+}
+
 async function runDbReadCheck() {
     const pool = getDbPool();
     if (!pool) {
@@ -783,6 +810,84 @@ app.post('/meta-capi/session-geo', async (req, res) => {
         return res.status(502).json({
             error: 'Session geo failed',
             details: error?.message || 'No se pudo guardar la geolocalización de sesión.',
+        });
+    }
+});
+
+app.post('/meta-capi/blocked-entry', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const domainAttacked = String(req.body?.domain || req.get('origin') || '').trim().toLowerCase();
+    const visitorId = String(req.body?.visitorId || '').trim();
+
+    if (!domainAttacked) {
+        return res.status(400).json({
+            error: 'Parámetros inválidos',
+            details: 'domain es requerido.',
+        });
+    }
+
+    const clientIp = getClientIp(req);
+    const visitorHash = visitorId ? sha256(visitorId) : null;
+    const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
+    const userAgent = req.get('user-agent') || null;
+
+    try {
+        const params = [domainAttacked, clientIp];
+        let whereByFingerprint = '';
+        if (visitorHash) {
+            whereByFingerprint = ' OR fingerprint_hash = ?';
+            params.push(visitorHash);
+        }
+
+        const [rows] = await pool.query(
+            `SELECT id
+             FROM call_attempts
+             WHERE domain_attacked = ?
+               AND created_at >= (UTC_TIMESTAMP() - INTERVAL 30 MINUTE)
+               AND reason_code = 'BLOCKED_ON_ENTRY'
+               AND (device_ip = ?${whereByFingerprint})
+             ORDER BY id DESC
+             LIMIT 1`,
+            params
+        );
+
+        if (Array.isArray(rows) && rows.length > 0) {
+            return res.json({
+                status: 'ok',
+                inserted: false,
+                alreadyLogged: true,
+                geo,
+                geoSource: geo?.source || 'ip_lookup',
+            });
+        }
+
+        await insertBlockedEntry(pool, {
+            domainAttacked,
+            clientIp,
+            visitorHash,
+            geo,
+            userAgent,
+        });
+
+        return res.json({
+            status: 'ok',
+            inserted: true,
+            alreadyLogged: false,
+            geo,
+            geoSource: geo?.source || 'ip_lookup',
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error registrando entrada bloqueada', error);
+        return res.status(502).json({
+            error: 'Blocked entry failed',
+            details: error?.message || 'No se pudo registrar la entrada bloqueada.',
         });
     }
 });

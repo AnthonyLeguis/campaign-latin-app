@@ -3,6 +3,7 @@ import { useInactivityRedirect } from "../hooks/useInactivityRedirect";
 import { PointingHand } from "../components/PointingHand";
 import { META_CAPI_BASE, sendMetaCapiEvent } from "../lib/metaCapi";
 import { getDeviceVisitorId } from "../lib/deviceFingerprint";
+import { getStoredGeoHint } from "../lib/geoHint";
 
 type PhoneConfig = {
   raw: string;
@@ -50,48 +51,7 @@ export const FinalView = ({
   }, []);
 
   const getGeoHint = useCallback(async () => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      return null;
-    }
-
-    return await new Promise<{
-      lat: number;
-      lon: number;
-      accuracy: number;
-    } | null>((resolve) => {
-      let finished = false;
-
-      const done = (
-        value: { lat: number; lon: number; accuracy: number } | null,
-      ) => {
-        if (!finished) {
-          finished = true;
-          resolve(value);
-        }
-      };
-
-      const timeout = window.setTimeout(() => done(null), 1800);
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          window.clearTimeout(timeout);
-          done({
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude,
-            accuracy: Math.round(pos.coords.accuracy || 0),
-          });
-        },
-        () => {
-          window.clearTimeout(timeout);
-          done(null);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 1500,
-          maximumAge: 5 * 60 * 1000,
-        },
-      );
-    });
+    return getStoredGeoHint();
   }, []);
 
   useEffect(() => {
@@ -130,6 +90,16 @@ export const FinalView = ({
         const body = (await response.json()) as { isBlocked?: boolean };
         if (!cancelled && body?.isBlocked === true) {
           setIsCallBlocked(true);
+
+          void fetch(`${META_CAPI_BASE}/blocked-entry`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              domain: window.location.hostname,
+              visitorId,
+              geoHint,
+            }),
+          }).catch(() => undefined);
         }
       } catch {
         // Si falla validación previa, dejamos que la validación final ocurra al click.
