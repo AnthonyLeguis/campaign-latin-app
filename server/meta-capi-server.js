@@ -75,9 +75,33 @@ function hasValidDashboardCredentials(user, password) {
 
 function getClientIp(req) {
     const clientIpHeader = req.headers['x-forwarded-for'];
-    return Array.isArray(clientIpHeader)
+    const ip = Array.isArray(clientIpHeader)
         ? clientIpHeader[0]
         : (clientIpHeader?.split(',')[0]?.trim() || req.ip || '0.0.0.0');
+
+    return normalizeIp(ip);
+}
+
+function normalizeIp(ipAddress) {
+    if (!ipAddress || typeof ipAddress !== 'string') {
+        return '0.0.0.0';
+    }
+
+    let normalized = ipAddress.trim();
+
+    if (normalized.includes(',')) {
+        normalized = normalized.split(',')[0].trim();
+    }
+
+    if (normalized.startsWith('::ffff:')) {
+        normalized = normalized.replace('::ffff:', '');
+    }
+
+    if (normalized === '::1') {
+        normalized = '127.0.0.1';
+    }
+
+    return normalized;
 }
 
 function sha256(value) {
@@ -111,33 +135,66 @@ function pickRandom(list) {
 }
 
 async function geolocateIp(ipAddress) {
-    if (!ipAddress) {
+    const normalizedIp = normalizeIp(ipAddress);
+
+    if (!normalizedIp || normalizedIp === '0.0.0.0') {
         return { country: null, state: null };
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
+    if (normalizedIp.startsWith('127.') || normalizedIp === 'localhost') {
+        return { country: null, state: null };
+    }
 
-    try {
-        const response = await fetch(`https://ipapi.co/${encodeURIComponent(ipAddress)}/json/`, {
-            signal: controller.signal,
-            headers: { 'Accept': 'application/json' },
-        });
+    async function fetchJson(url) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2500);
 
-        if (!response.ok) {
-            return { country: null, state: null };
+        try {
+            const response = await fetch(url, {
+                signal: controller.signal,
+                headers: { 'Accept': 'application/json' },
+            });
+
+            if (!response.ok) {
+                return null;
+            }
+
+            return await response.json();
+        } catch {
+            return null;
+        } finally {
+            clearTimeout(timeout);
         }
-
-        const data = await response.json();
-        return {
-            country: data?.country_name || null,
-            state: data?.region || null,
-        };
-    } catch {
-        return { country: null, state: null };
-    } finally {
-        clearTimeout(timeout);
     }
+
+    const ipapiData = await fetchJson(`https://ipapi.co/${encodeURIComponent(normalizedIp)}/json/`);
+    if (ipapiData?.country_name || ipapiData?.region) {
+        return {
+            country: ipapiData.country_name || null,
+            state: ipapiData.region || null,
+        };
+    }
+
+    const ipwhoisData = await fetchJson(`https://ipwho.is/${encodeURIComponent(normalizedIp)}`);
+    if (ipwhoisData?.success === true && (ipwhoisData?.country || ipwhoisData?.region)) {
+        return {
+            country: ipwhoisData.country || null,
+            state: ipwhoisData.region || null,
+        };
+    }
+
+    const ipinfoToken = process.env.IPINFO_TOKEN;
+    if (ipinfoToken) {
+        const ipinfoData = await fetchJson(`https://ipinfo.io/${encodeURIComponent(normalizedIp)}?token=${encodeURIComponent(ipinfoToken)}`);
+        if (ipinfoData?.country || ipinfoData?.region) {
+            return {
+                country: ipinfoData.country || null,
+                state: ipinfoData.region || null,
+            };
+        }
+    }
+
+    return { country: null, state: null };
 }
 
 async function runDbReadCheck() {
