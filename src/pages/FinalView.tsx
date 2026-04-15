@@ -335,9 +335,7 @@ export const FinalView = ({
         }`}
       >
         <div className="flex flex-col items-start">
-          <span className="text-lg font-bold">
-            {isCallBlocked ? "Llamada bloqueada" : "Llama Ahora"}
-          </span>
+          <span className="text-lg font-bold">Llama Ahora</span>
         </div>
         <PointingHand />
       </a>
@@ -360,18 +358,9 @@ export const FinalView = ({
               : "underline text-red-700"
           }`}
         >
-          {isCallBlocked
-            ? "Llamadas bloqueadas por seguridad"
-            : `Llama ya: ${phoneConfig.display}`}
+          Llama ya: {phoneConfig.display}
         </p>
       </a>
-
-      {isCallBlocked ? (
-        <p className="text-red-700 text-sm font-semibold text-center max-w-xs mb-3">
-          Detectamos actividad repetida en este dispositivo/red. Las llamadas se
-          bloquearon por seguridad.
-        </p>
-      ) : null}
 
       {/* Información adicional */}
       <div className="text-start text-sm text-gray-600 mb-4 w-full max-w-xs">
