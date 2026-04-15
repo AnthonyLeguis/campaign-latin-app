@@ -5,23 +5,19 @@ Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas
 ## Características principales
 
 - **SPA pura sin rutas en la URL:**
-
   - Navegación y flujo controlados por contexto, sin mostrar rutas en el navegador.
   - El usuario siempre inicia desde la pantalla principal y no puede saltar pasos ni guardar rutas.
 
 - **Inactividad y seguridad de flujo:**
-
   - Si el usuario permanece 2 minutos sin interactuar en una vista, es redirigido automáticamente a la pantalla principal.
   - No es posible acceder a vistas intermedias directamente desde el navegador.
 
 - **Diseño Sensacionalista y Mobile-First:**
-
   - Header con badge inclinado "BREAKING NEWS" y fondo con gradiente blanco-rojo-azul.
   - Footer con disclaimer y enlaces externos (Política de Privacidad, Términos de Servicio).
   - Layout responsivo usando Tailwind CSS y grid/flex.
 
 - **Navegación y Vistas:**
-
   - `View1`: Checkpoints de beneficios, botón de avance con icono PointingHand.
   - `View2`: Pregunta "¿Vives en los Estados Unidos?" con botones Sí/No. Reproduce audio al cargar.
   - `View3`: Pregunta "¿Tienes más de 40 años?" con botones Sí/No. Reproduce audio al cargar.
@@ -29,11 +25,9 @@ Aplicación web desarrollada con React, TypeScript y Vite, orientada a campañas
   - `NotAble`: Mensaje diplomático si el usuario no califica, sin preguntas, permite cierre manual.
 
 - **Componentes personalizados:**
-
   - `PointingHand`: GIF animado, color blanco, tamaño ajustable, usado en botones principales.
 
 - **Audio:**
-
   - Reproducción automática (con delay) en cada vista relevante (`View2`, `View3`, `FinalView`).
 
 - **Animaciones y estética mejorada:**
@@ -100,6 +94,39 @@ sendMetaCapiEvent({
 - Las variables de entorno aplican al **servidor** (CAPI) donde se ejecuta Node (Render/Netlify/etc.), no al sitio estático.
 
 - Recuerda mantener el token privado y anunciar en tu política de privacidad que se envían eventos a Meta con CAPI.
+
+## Diagnóstico de DB (Render free, sin Shell)
+
+Para validar conexión con MySQL de Hostinger desde Render (incluyendo plan gratis), este backend expone checks temporales protegidos por token:
+
+- `GET /meta-capi/health-db`
+- `POST /meta-capi/health-db/write-test`
+
+### Variables requeridas en Render
+
+- `DB_HOST`
+- `DB_PORT` (por defecto `3306`)
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_SSL` (`true` o `false`)
+- `DB_HEALTH_TOKEN` (secreto para autorizar pruebas)
+
+### Ejemplo de prueba (read check)
+
+```bash
+curl -X GET "https://TU-SERVICIO.onrender.com/meta-capi/health-db" \
+  -H "x-health-token: TU_DB_HEALTH_TOKEN"
+```
+
+### Ejemplo de prueba (write/read check)
+
+```bash
+curl -X POST "https://TU-SERVICIO.onrender.com/meta-capi/health-db/write-test" \
+  -H "x-health-token: TU_DB_HEALTH_TOKEN"
+```
+
+Si ambos responden `status: ok`, la DB está conectada correctamente y lista para la siguiente etapa.
 
 ## Personalización
 
