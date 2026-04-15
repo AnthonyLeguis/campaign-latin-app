@@ -42,6 +42,7 @@ export const AttackOnlineView = () => {
   const [generatedAt, setGeneratedAt] = useState("");
 
   useEffect(() => {
+    // Cargar config de credenciales
     fetch("/attack-online-auth.json")
       .then((res) => (res.ok ? res.json() : defaultAuthConfig))
       .then((json) => {
@@ -54,6 +55,25 @@ export const AttackOnlineView = () => {
               : defaultAuthConfig.password,
         };
         setConfig(nextConfig);
+
+        // Verificar si hay sesión guardada en localStorage
+        const savedSession = localStorage.getItem("attack_online_session");
+        if (savedSession) {
+          try {
+            const session = JSON.parse(savedSession);
+            if (
+              typeof session?.user === "string" &&
+              typeof session?.password === "string"
+            ) {
+              setUser(session.user);
+              setPassword(session.password);
+              setIsLoggedIn(true);
+              setPollingEnabled(true);
+            }
+          } catch {
+            // Si hay error al parsear, ignorar
+          }
+        }
       })
       .catch(() => {
         setConfig(defaultAuthConfig);
@@ -144,6 +164,11 @@ export const AttackOnlineView = () => {
       e.preventDefault();
 
       if (user === config.user && password === config.password) {
+        // Guardar sesión en localStorage
+        localStorage.setItem(
+          "attack_online_session",
+          JSON.stringify({ user, password }),
+        );
         setIsLoggedIn(true);
         setPollingEnabled(true);
         setError("");
@@ -168,6 +193,18 @@ export const AttackOnlineView = () => {
 
     return dt.toLocaleString();
   }, [generatedAt]);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("attack_online_session");
+    setIsLoggedIn(false);
+    setUser("");
+    setPassword("");
+    setRows([]);
+    setStats({});
+    setGeneratedAt("");
+    setError("");
+    setPollingEnabled(true);
+  }, []);
 
   if (!isLoggedIn) {
     return (
@@ -226,22 +263,31 @@ export const AttackOnlineView = () => {
           <h1 className="text-2xl md:text-3xl font-bold">
             Attack-online console
           </h1>
-          <button
-            type="button"
-            onClick={async () => {
-              const ok = await fetchLogs(user, password);
-              if (ok) {
-                setPollingEnabled(true);
-              }
-            }}
-            className="bg-cyan-600 hover:bg-cyan-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
-          >
-            {isLoading
-              ? "Actualizando..."
-              : pollingEnabled
-                ? "Actualizar"
-                : "Reintentar"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = await fetchLogs(user, password);
+                if (ok) {
+                  setPollingEnabled(true);
+                }
+              }}
+              className="bg-cyan-600 hover:bg-cyan-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
+            >
+              {isLoading
+                ? "Actualizando..."
+                : pollingEnabled
+                  ? "Actualizar"
+                  : "Reintentar"}
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="bg-red-600 hover:bg-red-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
