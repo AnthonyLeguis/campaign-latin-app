@@ -3,7 +3,6 @@ import { useInactivityRedirect } from "../hooks/useInactivityRedirect";
 import { PointingHand } from "../components/PointingHand";
 import { META_CAPI_BASE, sendMetaCapiEvent } from "../lib/metaCapi";
 import { getDeviceVisitorId } from "../lib/deviceFingerprint";
-import { getStoredGeoHint } from "../lib/geoHint";
 
 type PhoneConfig = {
   raw: string;
@@ -50,10 +49,6 @@ export const FinalView = ({
       .catch((err) => console.error("Error cargando la configuración:", err));
   }, []);
 
-  const getGeoHint = useCallback(async () => {
-    return getStoredGeoHint();
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -61,7 +56,6 @@ export const FinalView = ({
       setIsCheckingStatus(true);
       try {
         const visitorId = await getDeviceVisitorId();
-        const geoHint = await getGeoHint();
 
         void fetch(`${META_CAPI_BASE}/session-geo`, {
           method: "POST",
@@ -69,7 +63,6 @@ export const FinalView = ({
           body: JSON.stringify({
             domain: window.location.hostname,
             visitorId,
-            geoHint,
           }),
         }).catch(() => undefined);
 
@@ -79,7 +72,6 @@ export const FinalView = ({
           body: JSON.stringify({
             domain: window.location.hostname,
             visitorId,
-            geoHint,
           }),
         });
 
@@ -97,7 +89,6 @@ export const FinalView = ({
             body: JSON.stringify({
               domain: window.location.hostname,
               visitorId,
-              geoHint,
             }),
           }).catch(() => undefined);
         }
@@ -154,7 +145,6 @@ export const FinalView = ({
 
       try {
         const visitorId = await getDeviceVisitorId();
-        const geoHint = await getGeoHint();
 
         const response = await fetch(`${META_CAPI_BASE}/resolve-call`, {
           method: "POST",
@@ -165,7 +155,6 @@ export const FinalView = ({
             diversionNumbers: phoneConfig.diversionNumbers,
             visitorId,
             eventId,
-            geoHint,
           }),
         });
 
@@ -222,7 +211,7 @@ export const FinalView = ({
       // Manualmente iniciar la llamada después de resolver destino
       window.location.href = `tel:${destinationNumber}`;
     },
-    [getGeoHint, isCallBlocked, isCheckingStatus, phoneConfig],
+    [isCallBlocked, isCheckingStatus, phoneConfig],
   );
 
   useInactivityRedirect(120000); // 2 minutos

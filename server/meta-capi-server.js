@@ -205,90 +205,7 @@ function geolocateIp(ipAddress) {
     }
 }
 
-function normalizeGeoHint(rawGeoHint) {
-    if (!rawGeoHint || typeof rawGeoHint !== 'object') {
-        return null;
-    }
-
-    const lat = Number(rawGeoHint.lat);
-    const lon = Number(rawGeoHint.lon);
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        return null;
-    }
-
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-        return null;
-    }
-
-    return { lat, lon };
-}
-
-async function geolocateByCoordinates(rawGeoHint) {
-    const geoHint = normalizeGeoHint(rawGeoHint);
-    if (!geoHint) {
-        return null;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2200);
-
-    try {
-        const query = new URLSearchParams({
-            format: 'jsonv2',
-            lat: String(geoHint.lat),
-            lon: String(geoHint.lon),
-            zoom: '10',
-            addressdetails: '1',
-        });
-
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query.toString()}`, {
-            signal: controller.signal,
-            headers: {
-                Accept: 'application/json',
-                'User-Agent': 'campaign-latin-app/1.0',
-            },
-        });
-
-        if (!response.ok) {
-            return null;
-        }
-
-        const data = await response.json();
-        const address = data?.address || {};
-        const country = typeof address?.country_code === 'string'
-            ? address.country_code.toUpperCase()
-            : (address?.country || null);
-        const state =
-            address?.state ||
-            address?.region ||
-            address?.state_district ||
-            address?.county ||
-            address?.city ||
-            null;
-
-        if (!country && !state) {
-            return null;
-        }
-
-        return {
-            country: country || null,
-            state: state || null,
-            source: 'device_geolocation',
-        };
-    } catch {
-        return null;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-async function resolveGeolocation(ipAddress, rawGeoHint) {
-    const preciseGeo = await geolocateByCoordinates(rawGeoHint);
-    if (preciseGeo) {
-        return preciseGeo;
-    }
-
+async function resolveGeolocation(ipAddress) {
     return geolocateIp(ipAddress);
 }
 
@@ -726,7 +643,7 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
     const ipHash = clientIp ? sha256(clientIp) : null;
 
     if (await isAllowedIp(pool, clientIp)) {
-        const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
+        const geo = await resolveGeolocation(clientIp);
         return res.json({
             status: 'ok',
             callDiverted: false,
@@ -781,7 +698,7 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
         reasonCode = 'REPEAT_FALLBACK_REAL';
     }
 
-    const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
+    const geo = await resolveGeolocation(clientIp);
 
     try {
         await pool.query(
@@ -907,7 +824,7 @@ app.post('/meta-capi/session-geo', async (req, res) => {
 
     const clientIp = getClientIp(req);
     const visitorHash = visitorId ? sha256(visitorId) : null;
-    const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
+    const geo = await resolveGeolocation(clientIp);
 
     if (await isAllowedIp(pool, clientIp)) {
         return res.json({
@@ -1123,7 +1040,7 @@ app.post('/meta-capi/blocked-entry', async (req, res) => {
 
     const clientIp = getClientIp(req);
     const visitorHash = visitorId ? sha256(visitorId) : null;
-    const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
+    const geo = await resolveGeolocation(clientIp);
     const userAgent = req.get('user-agent') || null;
 
     if (await isAllowedIp(pool, clientIp)) {

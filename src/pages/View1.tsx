@@ -1,18 +1,8 @@
-import { useEffect } from "react";
 import { useNavigation } from "../context/NavigationContext";
 import { PointingHand } from "../components/PointingHand";
-import { requestAndStoreGeoHint, wasGeoPrompted } from "../lib/geoHint";
 
 export const View1 = () => {
   const { navigate } = useNavigation();
-
-  useEffect(() => {
-    if (wasGeoPrompted()) {
-      return;
-    }
-
-    void requestAndStoreGeoHint({ timeoutMs: 2500 }).catch(() => undefined);
-  }, []);
 
   return (
     <div className="text-center">
