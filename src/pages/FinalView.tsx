@@ -124,13 +124,6 @@ export const FinalView = ({
       }
       lastLeadSentRef.current = now;
 
-      type FbqFn = (
-        command: string,
-        eventName: string,
-        params?: Record<string, unknown>,
-        options?: { eventID?: string },
-      ) => void;
-
       const currency = "USD";
       const value = 0;
 
@@ -192,15 +185,7 @@ export const FinalView = ({
       }
 
       if (allowLead) {
-        try {
-          const fbq = (window as unknown as { fbq?: FbqFn } | undefined)?.fbq;
-          if (typeof fbq === "function") {
-            fbq("track", "Lead", { value, currency }, { eventID: eventId });
-          }
-        } catch {
-          // No-op: no queremos bloquear la acción del usuario
-        }
-
+        // Enviamos Lead solo por CAPI para evitar doble conteo en Meta.
         sendMetaCapiEvent({
           eventName: "Lead",
           eventId,
