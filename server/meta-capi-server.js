@@ -109,6 +109,50 @@ function sha256(value) {
     return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
+function isAllowedIpFormat(ipAddress) {
+    return typeof ipAddress === 'string' && /^(\d{1,3}\.){3}\d{1,3}$/.test(ipAddress);
+}
+
+async function ensureAllowedIpsTable(pool) {
+    await pool.query(
+        `CREATE TABLE IF NOT EXISTS allowed_ips (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            ip_address VARCHAR(45) NOT NULL,
+            label VARCHAR(120) DEFAULT NULL,
+            note VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_allowed_ips_ip_address (ip_address)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+    );
+}
+
+async function isAllowedIp(pool, ipAddress) {
+    if (!isAllowedIpFormat(ipAddress)) {
+        return false;
+    }
+
+    await ensureAllowedIpsTable(pool);
+    const [rows] = await pool.query(
+        'SELECT id FROM allowed_ips WHERE ip_address = ? LIMIT 1',
+        [ipAddress]
+    );
+
+    return Array.isArray(rows) && rows.length > 0;
+}
+
+async function getAllowedIpList(pool) {
+    await ensureAllowedIpsTable(pool);
+    const [rows] = await pool.query(
+        `SELECT id, ip_address, label, note, created_at, updated_at
+         FROM allowed_ips
+         ORDER BY updated_at DESC, id DESC`
+    );
+
+    return Array.isArray(rows) ? rows : [];
+}
+
 function normalizePhoneNumber(value) {
     if (typeof value !== 'string') {
         return '';
@@ -452,6 +496,58 @@ app.post('/meta-capi/event', async (req, res) => {
             }
 
             try {
+                if (await isAllowedIp(pool, client_ip_address)) {
+                    let finalCustomData = (custom_data && typeof custom_data === 'object') ? { ...custom_data } : undefined;
+
+                    if (event_name === 'Lead') {
+                        const parsed = DEFAULT_LEAD_VALUE != null && DEFAULT_LEAD_VALUE !== '' ? Number(DEFAULT_LEAD_VALUE) : 0;
+                        const safeValue = Number.isFinite(parsed) ? parsed : 0;
+
+                        if (!finalCustomData) {
+                            finalCustomData = { value: safeValue, currency: DEFAULT_CURRENCY };
+                        } else {
+                            if (finalCustomData.value == null) finalCustomData.value = safeValue;
+                            if (finalCustomData.currency == null) finalCustomData.currency = DEFAULT_CURRENCY;
+                        }
+                    }
+
+                    const payload = {
+                        data: [
+                            {
+                                event_name,
+                                event_time: event_time || Math.floor(Date.now() / 1000),
+                                event_id,
+                                action_source,
+                                custom_data: finalCustomData,
+                                user_data: {
+                                    client_ip_address,
+                                    client_user_agent,
+                                },
+                            },
+                        ],
+                    };
+
+                    if (TEST_EVENT_CODE) {
+                        payload.test_event_code = TEST_EVENT_CODE;
+                    }
+
+                    const response = await fetch(`https://graph.facebook.com/v17.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+
+                    const body = await response.json();
+
+                    if (!response.ok) {
+                        console.error('[meta-capi-server] ❌ Error al enviar evento', body);
+                        return res.status(502).json({ error: 'Meta API error', details: body });
+                    }
+
+                    console.log('[meta-capi-server] ✅ Evento enviado a Meta exitosamente (allowlist)');
+                    return res.json({ success: true, meta: body, allowlisted: true });
+                }
+
                 const [leadAuthRows] = await pool.query(
                     `SELECT call_diverted, created_at
                      FROM call_attempts
@@ -560,6 +656,14 @@ app.post('/meta-capi/call-status', async (req, res) => {
     const clientIp = getClientIp(req);
     const visitorHash = visitorId ? sha256(visitorId) : null;
 
+    if (await isAllowedIp(pool, clientIp)) {
+        return res.json({
+            status: 'ok',
+            isBlocked: false,
+            allowedIp: true,
+        });
+    }
+
     try {
         const params = [domainAttacked, clientIp];
         let whereByFingerprint = '';
@@ -620,6 +724,20 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
     const userAgent = req.get('user-agent') || null;
     const visitorHash = visitorId ? sha256(visitorId) : null;
     const ipHash = clientIp ? sha256(clientIp) : null;
+
+    if (await isAllowedIp(pool, clientIp)) {
+        const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
+        return res.json({
+            status: 'ok',
+            callDiverted: false,
+            callBlocked: false,
+            destinationNumber: realNumber,
+            allowLead: true,
+            reasonCode: 'ALLOWLISTED',
+            geo,
+            geoSource: 'allowlist',
+        });
+    }
 
     let shouldDivert = false;
     let reasonCode = 'FIRST_ATTEMPT';
@@ -791,6 +909,16 @@ app.post('/meta-capi/session-geo', async (req, res) => {
     const visitorHash = visitorId ? sha256(visitorId) : null;
     const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
 
+    if (await isAllowedIp(pool, clientIp)) {
+        return res.json({
+            status: 'ok',
+            updated: 0,
+            geo,
+            geoSource: 'allowlist',
+            allowedIp: true,
+        });
+    }
+
     try {
         const result = await updateLatestAttemptGeo(pool, {
             domainAttacked,
@@ -810,6 +938,166 @@ app.post('/meta-capi/session-geo', async (req, res) => {
         return res.status(502).json({
             error: 'Session geo failed',
             details: error?.message || 'No se pudo guardar la geolocalización de sesión.',
+        });
+    }
+});
+
+app.get('/meta-capi/allowed-ips', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    if (!hasValidDashboardCredentials(String(req.query?.user || ''), String(req.query?.password || ''))) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+        const rows = await getAllowedIpList(pool);
+        return res.json({ status: 'ok', rows });
+    } catch (error) {
+        console.error('[meta-capi-server] Error consultando IPs permitidas', error);
+        return res.status(502).json({
+            error: 'Allowed IPs list failed',
+            details: error?.message || 'No se pudo consultar las IPs permitidas.',
+        });
+    }
+});
+
+app.post('/meta-capi/allowed-ips', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const user = String(req.body?.user || '').trim();
+    const password = String(req.body?.password || '');
+    if (!hasValidDashboardCredentials(user, password)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const ipAddress = normalizeIp(String(req.body?.ipAddress || '').trim());
+    const label = String(req.body?.label || '').trim();
+    const note = String(req.body?.note || '').trim();
+
+    if (!isAllowedIpFormat(ipAddress)) {
+        return res.status(400).json({
+            error: 'Invalid IP',
+            details: 'Se requiere una IP IPv4 valida.',
+        });
+    }
+
+    try {
+        await ensureAllowedIpsTable(pool);
+        const [result] = await pool.query(
+            `INSERT INTO allowed_ips (ip_address, label, note)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                label = VALUES(label),
+                note = VALUES(note),
+                updated_at = CURRENT_TIMESTAMP`,
+            [ipAddress, label || null, note || null]
+        );
+
+        return res.json({
+            status: 'ok',
+            insertedId: result?.insertId || null,
+            ipAddress,
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error guardando IP permitida', error);
+        return res.status(502).json({
+            error: 'Allowed IP save failed',
+            details: error?.message || 'No se pudo guardar la IP permitida.',
+        });
+    }
+});
+
+app.put('/meta-capi/allowed-ips/:id', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const user = String(req.body?.user || '').trim();
+    const password = String(req.body?.password || '');
+    if (!hasValidDashboardCredentials(user, password)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const id = Number(req.params.id);
+    const ipAddress = normalizeIp(String(req.body?.ipAddress || '').trim());
+    const label = String(req.body?.label || '').trim();
+    const note = String(req.body?.note || '').trim();
+
+    if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    if (!isAllowedIpFormat(ipAddress)) {
+        return res.status(400).json({
+            error: 'Invalid IP',
+            details: 'Se requiere una IP IPv4 valida.',
+        });
+    }
+
+    try {
+        await ensureAllowedIpsTable(pool);
+        await pool.query(
+            `UPDATE allowed_ips
+             SET ip_address = ?, label = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [ipAddress, label || null, note || null, id]
+        );
+
+        return res.json({ status: 'ok', id, ipAddress });
+    } catch (error) {
+        console.error('[meta-capi-server] Error actualizando IP permitida', error);
+        return res.status(502).json({
+            error: 'Allowed IP update failed',
+            details: error?.message || 'No se pudo actualizar la IP permitida.',
+        });
+    }
+});
+
+app.delete('/meta-capi/allowed-ips/:id', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const user = String(req.body?.user || '').trim();
+    const password = String(req.body?.password || '');
+    if (!hasValidDashboardCredentials(user, password)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    try {
+        await ensureAllowedIpsTable(pool);
+        await pool.query('DELETE FROM allowed_ips WHERE id = ?', [id]);
+        return res.json({ status: 'ok', id });
+    } catch (error) {
+        console.error('[meta-capi-server] Error borrando IP permitida', error);
+        return res.status(502).json({
+            error: 'Allowed IP delete failed',
+            details: error?.message || 'No se pudo borrar la IP permitida.',
         });
     }
 });
@@ -837,6 +1125,17 @@ app.post('/meta-capi/blocked-entry', async (req, res) => {
     const visitorHash = visitorId ? sha256(visitorId) : null;
     const geo = await resolveGeolocation(clientIp, req.body?.geoHint);
     const userAgent = req.get('user-agent') || null;
+
+    if (await isAllowedIp(pool, clientIp)) {
+        return res.json({
+            status: 'ok',
+            inserted: false,
+            alreadyLogged: false,
+            allowedIp: true,
+            geo,
+            geoSource: 'allowlist',
+        });
+    }
 
     try {
         const params = [domainAttacked, clientIp];
