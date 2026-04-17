@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"; // ¡Añadido useState!
 import { useInactivityRedirect } from "../hooks/useInactivityRedirect";
 import { PointingHand } from "../components/PointingHand";
-import { META_CAPI_BASE, sendMetaCapiEvent } from "../lib/metaCapi";
+import { META_CAPI_BASE } from "../lib/metaCapi";
 import { getDeviceVisitorId } from "../lib/deviceFingerprint";
 
 type PhoneConfig = {
@@ -127,6 +127,13 @@ export const FinalView = ({
       const currency = "USD";
       const value = 0;
 
+      type FbqFn = (
+        command: string,
+        eventName: string,
+        params?: Record<string, unknown>,
+        options?: { eventID?: string },
+      ) => void;
+
       const eventId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -185,12 +192,14 @@ export const FinalView = ({
       }
 
       if (allowLead) {
-        // Enviamos Lead solo por CAPI para evitar doble conteo en Meta.
-        sendMetaCapiEvent({
-          eventName: "Lead",
-          eventId,
-          customData: { value, currency },
-        });
+        try {
+          const fbq = (window as unknown as { fbq?: FbqFn } | undefined)?.fbq;
+          if (typeof fbq === "function") {
+            fbq("track", "Lead", { value, currency }, { eventID: eventId });
+          }
+        } catch {
+          // No-op: no queremos bloquear la acción del usuario
+        }
       }
 
       // Manualmente iniciar la llamada después de resolver destino
