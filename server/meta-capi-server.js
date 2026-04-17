@@ -153,6 +153,36 @@ async function getAllowedIpList(pool) {
     return Array.isArray(rows) ? rows : [];
 }
 
+async function ensureMetaEventDedupTable(pool) {
+    await pool.query(
+        `CREATE TABLE IF NOT EXISTS meta_event_dedup (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            event_id VARCHAR(100) NOT NULL,
+            event_name VARCHAR(64) NOT NULL,
+            client_ip VARCHAR(45) DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_meta_event_dedup_event_id (event_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+    );
+}
+
+async function reserveMetaEventId(pool, eventName, eventId, clientIp) {
+    if (eventName !== 'Lead' || !eventId) {
+        return { deduped: false };
+    }
+
+    await ensureMetaEventDedupTable(pool);
+    const [result] = await pool.query(
+        `INSERT IGNORE INTO meta_event_dedup (event_id, event_name, client_ip)
+         VALUES (?, ?, ?)`,
+        [String(eventId), String(eventName), clientIp || null]
+    );
+
+    const inserted = Number(result?.affectedRows || 0) > 0;
+    return { deduped: !inserted };
+}
+
 function normalizePhoneNumber(value) {
     if (typeof value !== 'string') {
         return '';
@@ -414,6 +444,11 @@ app.post('/meta-capi/event', async (req, res) => {
 
             try {
                 if (await isAllowedIp(pool, client_ip_address)) {
+                    const dedupResult = await reserveMetaEventId(pool, event_name, event_id, client_ip_address);
+                    if (dedupResult.deduped) {
+                        return res.json({ success: true, deduped: true, allowlisted: true });
+                    }
+
                     let finalCustomData = (custom_data && typeof custom_data === 'object') ? { ...custom_data } : undefined;
 
                     if (event_name === 'Lead') {
@@ -484,6 +519,11 @@ app.post('/meta-capi/event', async (req, res) => {
                         error: 'Lead blocked',
                         details: 'Lead rechazado por política anti-abuso.',
                     });
+                }
+
+                const dedupResult = await reserveMetaEventId(pool, event_name, event_id, client_ip_address);
+                if (dedupResult.deduped) {
+                    return res.json({ success: true, deduped: true });
                 }
             } catch (dbError) {
                 console.error('[meta-capi-server] Error validando autorización de Lead', dbError);
