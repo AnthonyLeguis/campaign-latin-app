@@ -7,7 +7,6 @@ import { getDeviceVisitorId } from "../lib/deviceFingerprint";
 type PhoneConfig = {
   raw: string;
   display: string;
-  diversionNumbers: string[];
 };
 
 export const FinalView = ({
@@ -24,7 +23,6 @@ export const FinalView = ({
   const [phoneConfig, setPhoneConfig] = useState<PhoneConfig>({
     raw: "+14696637105",
     display: "(888) 904-4955",
-    diversionNumbers: [],
   });
 
   // 2. NUEVO: Leer el archivo config.json al cargar el componente
@@ -33,16 +31,9 @@ export const FinalView = ({
       .then((res) => res.json())
       .then((data) => {
         if (data.phoneRaw && data.phoneDisplay) {
-          const diversionNumbers = Array.isArray(data.diversionNumbers)
-            ? data.diversionNumbers.filter(
-                (n: unknown) => typeof n === "string",
-              )
-            : [];
-
           setPhoneConfig({
             raw: data.phoneRaw,
             display: data.phoneDisplay,
-            diversionNumbers,
           });
         }
       })
@@ -152,7 +143,6 @@ export const FinalView = ({
           body: JSON.stringify({
             domain: window.location.hostname,
             realNumber: phoneConfig.raw,
-            diversionNumbers: phoneConfig.diversionNumbers,
             visitorId,
             eventId,
           }),
@@ -291,28 +281,6 @@ export const FinalView = ({
           <span className="text-lg font-bold">Llama Ahora</span>
         </div>
         <PointingHand />
-      </a>
-
-      {/* Enlace secundario de llamada */}
-      <a
-        href={isCallBlocked ? "#" : `tel:${phoneConfig.raw}`}
-        onClick={trackLead}
-        aria-disabled={isCallBlocked || isCheckingStatus}
-        className={`pb-4 ${
-          isCallBlocked || isCheckingStatus
-            ? "pointer-events-none cursor-not-allowed"
-            : ""
-        }`}
-      >
-        <p
-          className={`text-sm sm:text-base ${
-            isCallBlocked || isCheckingStatus
-              ? "text-slate-500"
-              : "underline text-red-700"
-          }`}
-        >
-          Llama ya: {phoneConfig.display}
-        </p>
       </a>
 
       {/* Información adicional */}

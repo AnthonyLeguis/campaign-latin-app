@@ -4,6 +4,7 @@ import cors from 'cors';
 import mysql from 'mysql2/promise';
 import crypto from 'crypto';
 import geoip from 'geoip-lite';
+import { isIP } from 'node:net';
 
 const app = express();
 const port = process.env.PORT || process.env.META_CAPI_PORT || 8787;
@@ -90,8 +91,28 @@ function normalizeIp(ipAddress) {
 
     let normalized = ipAddress.trim();
 
+    if (normalized.startsWith('for=')) {
+        normalized = normalized.slice(4);
+    }
+
+    normalized = normalized.replace(/^"|"$/g, '');
+
     if (normalized.includes(',')) {
         normalized = normalized.split(',')[0].trim();
+    }
+
+    if (normalized.startsWith('[') && normalized.includes(']')) {
+        normalized = normalized.slice(1, normalized.indexOf(']'));
+    }
+
+    // Si viene IPv4 con puerto (ej: 186.88.4.211:52311), quitar puerto.
+    if (/^(\d{1,3}\.){3}\d{1,3}:\d+$/.test(normalized)) {
+        normalized = normalized.split(':')[0];
+    }
+
+    // Quitar zone id de IPv6 (ej: fe80::1%eth0)
+    if (normalized.includes('%')) {
+        normalized = normalized.split('%')[0];
     }
 
     if (normalized.startsWith('::ffff:')) {
@@ -110,7 +131,7 @@ function sha256(value) {
 }
 
 function isAllowedIpFormat(ipAddress) {
-    return typeof ipAddress === 'string' && /^(\d{1,3}\.){3}\d{1,3}$/.test(ipAddress);
+    return typeof ipAddress === 'string' && isIP(ipAddress) !== 0;
 }
 
 async function ensureAllowedIpsTable(pool) {
@@ -665,10 +686,6 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
     const domainAttacked = String(req.body?.domain || req.get('origin') || '').trim().toLowerCase();
     const realNumber = normalizePhoneNumber(req.body?.realNumber || '');
     const visitorId = String(req.body?.visitorId || '').trim();
-    const diversionNumbersRaw = Array.isArray(req.body?.diversionNumbers) ? req.body.diversionNumbers : [];
-    const diversionNumbers = diversionNumbersRaw
-        .map((n) => normalizePhoneNumber(n))
-        .filter((n) => Boolean(n && n !== realNumber));
 
     if (!domainAttacked || !realNumber) {
         return res.status(400).json({
@@ -730,13 +747,7 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
         });
     }
 
-    const destinationNumber = shouldDivert
-        ? (pickRandom(diversionNumbers) || realNumber)
-        : realNumber;
-
-    if (shouldDivert && destinationNumber === realNumber) {
-        reasonCode = 'REPEAT_FALLBACK_REAL';
-    }
+    const destinationNumber = realNumber;
 
     const geo = await resolveGeolocation(clientIp);
 
@@ -754,7 +765,7 @@ app.post('/meta-capi/resolve-call', async (req, res) => {
                 geo.country,
                 geo.state,
                 shouldDivert ? 1 : 0,
-                destinationNumber,
+                shouldDivert ? null : destinationNumber,
                 realNumber,
                 reasonCode,
                 userAgent,
