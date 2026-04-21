@@ -4,11 +4,6 @@ import { PointingHand } from "../components/PointingHand";
 import { META_CAPI_BASE } from "../lib/metaCapi";
 import { getDeviceVisitorId } from "../lib/deviceFingerprint";
 
-type PhoneConfig = {
-  raw: string;
-  display: string;
-};
-
 export const FinalView = ({
   waitTime = 30,
   agentsAvailable = 5,
@@ -19,22 +14,16 @@ export const FinalView = ({
   const [isCallBlocked, setIsCallBlocked] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
 
-  // 1. NUEVO: Estado para guardar el teléfono (con tus valores originales como respaldo)
-  const [phoneConfig, setPhoneConfig] = useState<PhoneConfig>({
-    raw: "+14696637105",
-    display: "(888) 904-4955",
-  });
+  // Estado para guardar el teléfono principal (con valor por defecto)
+  const [phoneRaw, setPhoneRaw] = useState("+14696637105");
 
-  // 2. NUEVO: Leer el archivo config.json al cargar el componente
+  // Leer el archivo config.json al cargar el componente
   useEffect(() => {
     fetch("/config.json")
       .then((res) => res.json())
       .then((data) => {
-        if (data.phoneRaw && data.phoneDisplay) {
-          setPhoneConfig({
-            raw: data.phoneRaw,
-            display: data.phoneDisplay,
-          });
+        if (data.phoneRaw) {
+          setPhoneRaw(data.phoneRaw);
         }
       })
       .catch((err) => console.error("Error cargando la configuración:", err));
@@ -130,7 +119,7 @@ export const FinalView = ({
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-      let destinationNumber = phoneConfig.raw;
+      let destinationNumber = phoneRaw;
       // Modo seguro: solo enviar Lead si el backend lo autoriza explícitamente.
       let allowLead = false;
 
@@ -142,7 +131,7 @@ export const FinalView = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             domain: window.location.hostname,
-            realNumber: phoneConfig.raw,
+            realNumber: phoneRaw,
             visitorId,
             eventId,
           }),
@@ -195,7 +184,7 @@ export const FinalView = ({
       // Manualmente iniciar la llamada después de resolver destino
       window.location.href = `tel:${destinationNumber}`;
     },
-    [isCallBlocked, isCheckingStatus, phoneConfig],
+    [isCallBlocked, isCheckingStatus, phoneRaw],
   );
 
   useInactivityRedirect(120000); // 2 minutos
