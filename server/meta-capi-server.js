@@ -1070,6 +1070,43 @@ app.delete('/meta-capi/allowed-ips/:id', async (req, res) => {
     }
 });
 
+// DIAGNOSTICO: Endpoint para debuggear problemas de IP permitida
+app.post('/meta-capi/diagnose-ip', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    try {
+        const clientIp = getClientIp(req);
+        const rawIpFromHeader = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+
+        await ensureAllowedIpsTable(pool);
+        const [allowedIps] = await pool.query(
+            'SELECT id, ip_address, label FROM allowed_ips ORDER BY created_at DESC LIMIT 10'
+        );
+
+        const isAllowed = await isAllowedIp(pool, clientIp);
+
+        return res.json({
+            detected_ip_normalized: clientIp,
+            raw_ip_from_header: rawIpFromHeader,
+            is_allowed: isAllowed,
+            allowed_ips_list: Array.isArray(allowedIps) ? allowedIps : [],
+            message: 'Usa esta info para debuggear por que tu IP no esta siendo permitida',
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error en diagnostico de IP', error);
+        return res.status(502).json({
+            error: 'Diagnosis failed',
+            details: error?.message,
+        });
+    }
+});
+
 app.post('/meta-capi/blocked-entry', async (req, res) => {
     const pool = getDbPool();
     if (!pool) {

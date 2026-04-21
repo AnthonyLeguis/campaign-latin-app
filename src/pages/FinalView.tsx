@@ -98,7 +98,7 @@ export const FinalView = ({
   }, []);
 
   const trackLead = useCallback(
-    async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    async (e: React.MouseEvent<HTMLButtonElement>) => {
       // Prevenir comportamiento por defecto y propagación
       e.preventDefault();
       e.stopPropagation();
@@ -267,13 +267,12 @@ export const FinalView = ({
       </div>
 
       {/* Botón de llamada principal */}
-      <a
-        href={isCallBlocked ? "#" : `tel:${phoneConfig.raw}`}
+      <button
         onClick={trackLead}
-        aria-disabled={isCallBlocked || isCheckingStatus}
+        disabled={isCallBlocked || isCheckingStatus}
         className={`w-full max-w-xs sm:w-7/12 text-white py-2 rounded-md text-lg sm:text-xl font-bold shadow -tracking-tighter transition-colors flex items-center justify-center gap-2 mb-2 pl-4 sm:pl-6 ${
           isCallBlocked || isCheckingStatus
-            ? "bg-slate-500 cursor-not-allowed pointer-events-none"
+            ? "bg-slate-500 cursor-not-allowed"
             : "bg-[#084f63] hover:bg-[#0a5f77] cursor-pointer"
         }`}
       >
@@ -281,7 +280,7 @@ export const FinalView = ({
           <span className="text-lg font-bold">Llama Ahora</span>
         </div>
         <PointingHand />
-      </a>
+      </button>
 
       {/* Información adicional */}
       <div className="text-start text-sm text-gray-600 mb-4 w-full max-w-xs">
