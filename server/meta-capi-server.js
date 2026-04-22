@@ -854,6 +854,52 @@ app.post('/meta-capi/attack-online/logs', async (req, res) => {
     }
 });
 
+app.post('/meta-capi/attack-online/reset-blocked', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const user = String(req.body?.user || '').trim();
+    const password = String(req.body?.password || '');
+    if (!hasValidDashboardCredentials(user, password)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const scope = String(req.body?.scope || 'all').trim().toLowerCase();
+    if (scope !== 'all' && scope !== 'blocked') {
+        return res.status(400).json({
+            error: 'Invalid scope',
+            details: 'scope debe ser all o blocked.',
+        });
+    }
+
+    try {
+        const [result] = scope === 'blocked'
+            ? await pool.query(
+                `DELETE FROM call_attempts
+                 WHERE call_diverted = 1
+                    OR reason_code = 'BLOCKED_ON_ENTRY'`
+            )
+            : await pool.query('DELETE FROM call_attempts');
+
+        return res.json({
+            status: 'ok',
+            scope,
+            deletedRows: Number(result?.affectedRows || 0),
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error reiniciando registros de bloqueo', error);
+        return res.status(502).json({
+            error: 'Attack reset failed',
+            details: error?.message || 'No se pudo reiniciar los registros de bloqueo.',
+        });
+    }
+});
+
 app.post('/meta-capi/session-geo', async (req, res) => {
     const pool = getDbPool();
     if (!pool) {
