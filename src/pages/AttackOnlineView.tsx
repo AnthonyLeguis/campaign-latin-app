@@ -480,6 +480,15 @@ export const AttackOnlineView = () => {
             </button>
             <button
               type="button"
+              onClick={() => {
+                window.location.assign("/clients-data");
+              }}
+              className="bg-sky-600 hover:bg-sky-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
+            >
+              Ver clientes
+            </button>
+            <button
+              type="button"
               onClick={openAllowedIpsModal}
               className="bg-emerald-600 hover:bg-emerald-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
             >

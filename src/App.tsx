@@ -8,14 +8,20 @@ import { NotAble } from "./pages/NotAble";
 import { LegalView } from "./pages/LegalView";
 import { ViewContainer } from "./components/ViewContainer";
 import { AttackOnlineView } from "./pages/AttackOnlineView";
+import { DataClientsView } from "./pages/DataClientsView";
 
 function App() {
   const { currentView } = useNavigation();
   const path =
     typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
+  const normalizedPath = path.replace(/\/+$/, "") || "/";
 
-  if (path === "/attack-online") {
+  if (normalizedPath === "/attack-online") {
     return <AttackOnlineView />;
+  }
+
+  if (normalizedPath === "/clients-data") {
+    return <DataClientsView />;
   }
 
   return (
