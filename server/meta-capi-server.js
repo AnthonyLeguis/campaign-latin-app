@@ -332,6 +332,164 @@ async function insertBlockedEntry(pool, {
     );
 }
 
+async function ensureClientLeadsTable(pool) {
+    await pool.query(
+        `CREATE TABLE IF NOT EXISTS client_leads (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            full_name VARCHAR(120) NOT NULL,
+            phone VARCHAR(25) NOT NULL,
+            zip_code VARCHAR(12) NOT NULL,
+            age_range VARCHAR(32) DEFAULT NULL,
+            intro_answer VARCHAR(32) DEFAULT NULL,
+            domain_attacked VARCHAR(255) DEFAULT NULL,
+            device_ip VARCHAR(45) DEFAULT NULL,
+            country VARCHAR(80) DEFAULT NULL,
+            state_region VARCHAR(120) DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_client_leads_created_at (created_at),
+            KEY idx_client_leads_domain_created_at (domain_attacked, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+    );
+}
+
+async function insertClientLead(pool, {
+    fullName,
+    phone,
+    zipCode,
+    ageRange,
+    introAnswer,
+    domainAttacked,
+    clientIp,
+    geo,
+}) {
+    await ensureClientLeadsTable(pool);
+    await pool.query(
+        `INSERT INTO client_leads
+            (full_name, phone, zip_code, age_range, intro_answer, domain_attacked, device_ip, country, state_region)
+         VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        [
+            fullName,
+            phone,
+            zipCode,
+            ageRange || null,
+            introAnswer || null,
+            domainAttacked || null,
+            clientIp || null,
+            geo?.country || null,
+            geo?.state || null,
+        ]
+    );
+}
+
+async function getClientLeads(pool, limit = 200) {
+    await ensureClientLeadsTable(pool);
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(500, Math.trunc(limit))) : 200;
+    const [rows] = await pool.query(
+        `SELECT id, full_name, phone, zip_code, age_range, intro_answer, domain_attacked, device_ip, country, state_region, created_at, updated_at
+         FROM client_leads
+         ORDER BY created_at DESC, id DESC
+         LIMIT ${safeLimit}`
+    );
+
+    return Array.isArray(rows) ? rows : [];
+}
+
+async function getClientLeadById(pool, id) {
+    await ensureClientLeadsTable(pool);
+    const [rows] = await pool.query(
+        `SELECT id, full_name, phone, zip_code, age_range, intro_answer, domain_attacked, device_ip, country, state_region, created_at, updated_at
+         FROM client_leads
+         WHERE id = ?
+         LIMIT 1`,
+        [id]
+    );
+
+    return Array.isArray(rows) ? rows[0] : null;
+}
+
+async function updateClientLead(pool, id, data) {
+    await ensureClientLeadsTable(pool);
+    const fullName = String(data?.fullName || '').trim();
+    const phone = normalizePhoneNumber(String(data?.phone || '').trim());
+    const zipCode = String(data?.zipCode || '').replace(/\D/g, '').slice(0, 5);
+    const ageRange = String(data?.ageRange || '').trim();
+    const introAnswer = String(data?.introAnswer || '').trim();
+
+    if (!fullName) {
+        return {
+            ok: false,
+            code: 400,
+            error: 'Invalid name',
+            details: 'El nombre es requerido.',
+        };
+    }
+
+    if (phone.replace(/\D/g, '').length !== 10 && phone.replace(/\D/g, '').length !== 11) {
+        return {
+            ok: false,
+            code: 400,
+            error: 'Invalid phone',
+            details: 'Se requiere un teléfono válido.',
+        };
+    }
+
+    if (zipCode.length !== 5) {
+        return {
+            ok: false,
+            code: 400,
+            error: 'Invalid ZIP',
+            details: 'Se requiere un código postal válido de 5 dígitos.',
+        };
+    }
+
+    const [result] = await pool.query(
+        `UPDATE client_leads
+         SET full_name = ?, phone = ?, zip_code = ?, age_range = ?, intro_answer = ?
+         WHERE id = ?`,
+        [fullName, phone, zipCode, ageRange || null, introAnswer || null, id]
+    );
+
+    if (Number(result?.affectedRows || 0) === 0) {
+        return {
+            ok: false,
+            code: 404,
+            error: 'Lead not found',
+            details: 'No se encontró el cliente a editar.',
+        };
+    }
+
+    return {
+        ok: true,
+        code: 200,
+        data: await getClientLeadById(pool, id),
+    };
+}
+
+async function deleteClientLead(pool, id) {
+    await ensureClientLeadsTable(pool);
+    const [result] = await pool.query(
+        'DELETE FROM client_leads WHERE id = ? LIMIT 1',
+        [id]
+    );
+
+    if (Number(result?.affectedRows || 0) === 0) {
+        return {
+            ok: false,
+            code: 404,
+            error: 'Lead not found',
+            details: 'No se encontró el cliente a eliminar.',
+        };
+    }
+
+    return {
+        ok: true,
+        code: 200,
+    };
+}
+
 async function runDbReadCheck() {
     const pool = getDbPool();
     if (!pool) {
@@ -812,18 +970,41 @@ app.post('/meta-capi/attack-online/logs', async (req, res) => {
     try {
         const [rows] = await pool.query(
             `SELECT
-                domain_attacked,
-                device_ip,
-                MAX(country) AS country,
-                MAX(state_region) AS state_region,
-                SUM(CASE WHEN call_diverted = 1 THEN 1 ELSE 0 END) AS diverted_count,
-                COUNT(*) AS total_attempts,
-                MAX(created_at) AS last_attempt_at,
-                MAX(reason_code) AS last_reason_code
-             FROM call_attempts
-             WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
-             GROUP BY domain_attacked, device_ip
-             ORDER BY last_attempt_at DESC
+                grouped.domain_attacked,
+                grouped.device_ip,
+                grouped.country,
+                grouped.state_region,
+                grouped.diverted_count,
+                grouped.total_attempts,
+                grouped.last_attempt_at,
+                CASE
+                    WHEN grouped.total_attempts = 1 THEN 'FIRST_ATTEMPT'
+                    ELSE latest.reason_code
+                END AS last_reason_code
+             FROM (
+                SELECT
+                    domain_attacked,
+                    device_ip,
+                    MAX(country) AS country,
+                    MAX(state_region) AS state_region,
+                    SUM(CASE WHEN call_diverted = 1 THEN 1 ELSE 0 END) AS diverted_count,
+                    COUNT(*) AS total_attempts,
+                    MAX(created_at) AS last_attempt_at
+                 FROM call_attempts
+                 WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
+                 GROUP BY domain_attacked, device_ip
+             ) AS grouped
+             LEFT JOIN call_attempts AS latest
+               ON latest.id = (
+                    SELECT ca.id
+                    FROM call_attempts ca
+                    WHERE ca.domain_attacked = grouped.domain_attacked
+                      AND ca.device_ip = grouped.device_ip
+                      AND ca.created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)
+                    ORDER BY ca.created_at DESC, ca.id DESC
+                    LIMIT 1
+               )
+             ORDER BY grouped.last_attempt_at DESC
              LIMIT ?`,
             [limit]
         );
@@ -1238,6 +1419,187 @@ app.post('/meta-capi/blocked-entry', async (req, res) => {
         return res.status(502).json({
             error: 'Blocked entry failed',
             details: error?.message || 'No se pudo registrar la entrada bloqueada.',
+        });
+    }
+});
+
+app.post('/meta-capi/client-leads', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    const fullName = String(req.body?.fullName || '').trim();
+    const phone = normalizePhoneNumber(String(req.body?.phone || '').trim());
+    const zipCode = String(req.body?.zipCode || '').replace(/\D/g, '').slice(0, 5);
+    const ageRange = String(req.body?.ageRange || '').trim();
+    const introAnswer = String(req.body?.introAnswer || '').trim();
+    const domainAttacked = String(req.body?.domain || req.get('origin') || '').trim().toLowerCase();
+
+    if (!fullName) {
+        return res.status(400).json({
+            error: 'Invalid name',
+            details: 'El nombre es requerido.',
+        });
+    }
+
+    if (phone.replace(/\D/g, '').length !== 10 && phone.replace(/\D/g, '').length !== 11) {
+        return res.status(400).json({
+            error: 'Invalid phone',
+            details: 'Se requiere un teléfono válido.',
+        });
+    }
+
+    if (zipCode.length !== 5) {
+        return res.status(400).json({
+            error: 'Invalid ZIP',
+            details: 'Se requiere un código postal válido de 5 dígitos.',
+        });
+    }
+
+    try {
+        const clientIp = getClientIp(req);
+        const geo = await resolveGeolocation(clientIp);
+
+        await insertClientLead(pool, {
+            fullName,
+            phone,
+            zipCode,
+            ageRange,
+            introAnswer,
+            domainAttacked,
+            clientIp,
+            geo,
+        });
+
+        return res.json({
+            status: 'ok',
+            country: geo?.country || null,
+            state_region: geo?.state || null,
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error guardando client lead', error);
+        return res.status(502).json({
+            error: 'Client lead save failed',
+            details: error?.message || 'No se pudo guardar el lead del cliente.',
+        });
+    }
+});
+
+app.get('/meta-capi/client-leads', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    if (!hasValidDashboardCredentials(String(req.query?.user || ''), String(req.query?.password || ''))) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const limit = Number(req.query?.limit || 200);
+
+    try {
+        const rows = await getClientLeads(pool, limit);
+        return res.json({
+            status: 'ok',
+            rows,
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error consultando client leads', error);
+        return res.status(502).json({
+            error: 'Client leads list failed',
+            details: error?.message || 'No se pudo consultar el listado de clientes.',
+        });
+    }
+});
+
+app.put('/meta-capi/client-leads/:id', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    if (!hasValidDashboardCredentials(String(req.query?.user || ''), String(req.query?.password || ''))) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const id = Number(req.params?.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+            error: 'Invalid lead id',
+            details: 'El identificador del cliente no es válido.',
+        });
+    }
+
+    try {
+        const result = await updateClientLead(pool, id, req.body || {});
+
+        if (!result.ok) {
+            return res.status(result.code).json({
+                error: result.error,
+                details: result.details,
+            });
+        }
+
+        return res.json({
+            status: 'ok',
+            row: result.data,
+        });
+    } catch (error) {
+        console.error('[meta-capi-server] Error actualizando client lead', error);
+        return res.status(502).json({
+            error: 'Client lead update failed',
+            details: error?.message || 'No se pudo actualizar el cliente.',
+        });
+    }
+});
+
+app.delete('/meta-capi/client-leads/:id', async (req, res) => {
+    const pool = getDbPool();
+    if (!pool) {
+        return res.status(503).json({
+            error: 'DB no configurada',
+            details: 'Faltan variables DB_* en el backend.',
+        });
+    }
+
+    if (!hasValidDashboardCredentials(String(req.query?.user || ''), String(req.query?.password || ''))) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const id = Number(req.params?.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({
+            error: 'Invalid lead id',
+            details: 'El identificador del cliente no es válido.',
+        });
+    }
+
+    try {
+        const result = await deleteClientLead(pool, id);
+
+        if (!result.ok) {
+            return res.status(result.code).json({
+                error: result.error,
+                details: result.details,
+            });
+        }
+
+        return res.json({ status: 'ok' });
+    } catch (error) {
+        console.error('[meta-capi-server] Error eliminando client lead', error);
+        return res.status(502).json({
+            error: 'Client lead delete failed',
+            details: error?.message || 'No se pudo eliminar el cliente.',
         });
     }
 });
