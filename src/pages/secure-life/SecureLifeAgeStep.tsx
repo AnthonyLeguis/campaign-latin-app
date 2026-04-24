@@ -28,7 +28,7 @@ export const SecureLifeAgeStep = ({
       ref={ageSectionRef}
     >
       <div className="msg-row user flex flex-row-reverse items-end gap-2.5">
-        <div className="chat-bubble user ml-auto max-w-[76%] rounded-[20px] rounded-br-[4px] px-4 py-3 text-[15px] leading-[1.6] text-white">
+        <div className="chat-bubble user ml-auto max-w-[84%] rounded-[20px] rounded-br-[4px] px-4 py-3 text-[15px] leading-[1.6] text-white sm:max-w-[76%]">
           {introAnswer}
         </div>
       </div>
@@ -37,7 +37,7 @@ export const SecureLifeAgeStep = ({
 
       {showAgeTyping ? (
         <div className="msg-row flex items-end gap-2.5">
-          <div className="chat-avatar avatar flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-full border-[2.5px] border-white bg-gradient-to-br from-[#0f4f91] via-[#1565C0] to-[#0b3666] text-[15px] font-extrabold text-white">
+          <div className="chat-avatar avatar flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full border-[2.5px] border-white bg-gradient-to-br from-[#0f4f91] via-[#1565C0] to-[#0b3666] text-[14px] font-extrabold text-white sm:h-[38px] sm:w-[38px] sm:text-[15px]">
             S
           </div>
           <div className="typing flex w-fit items-center gap-1.5 rounded-[18px] rounded-bl-[4px] border border-[#d7e8f8] bg-white/90 px-4 py-3 shadow-[0_1px_4px_rgba(21,101,192,0.1)] backdrop-blur-sm">
@@ -57,7 +57,7 @@ export const SecureLifeAgeStep = ({
             <div className="chat-avatar avatar flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-full border-[2.5px] border-white bg-gradient-to-br from-[#0f4f91] via-[#1565C0] to-[#0b3666] text-[15px] font-extrabold text-white">
               S
             </div>
-            <div className="chat-bubble agent max-w-[76%] rounded-[20px] rounded-bl-[4px] px-4 py-3 text-[15px] leading-[1.6] text-slate-900">
+            <div className="chat-bubble agent max-w-[84%] rounded-[20px] rounded-bl-[4px] px-4 py-3 text-[15px] leading-[1.6] text-slate-900 sm:max-w-[76%]">
               ¿Cuál es tu rango de edad?
             </div>
           </div>

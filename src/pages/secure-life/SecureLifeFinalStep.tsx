@@ -29,7 +29,7 @@ export const SecureLifeFinalStep = ({
       ref={finalSectionRef}
     >
       <div className="msg-row user flex flex-row-reverse items-end gap-2.5">
-        <div className="chat-bubble user ml-auto max-w-[76%] rounded-[20px] rounded-br-[4px] px-4 py-3 text-[15px] leading-[1.6] text-white">
+        <div className="chat-bubble user ml-auto max-w-[84%] rounded-[20px] rounded-br-[4px] px-4 py-3 text-[15px] leading-[1.6] text-white sm:max-w-[76%]">
           {selectedAge}
         </div>
       </div>
@@ -55,10 +55,10 @@ export const SecureLifeFinalStep = ({
             Sophia · Secure Life
           </div>
           <div className="msg-row flex items-end gap-2.5">
-            <div className="chat-avatar avatar flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-full border-[2.5px] border-white bg-gradient-to-br from-[#0f4f91] via-[#1565C0] to-[#0b3666] text-[15px] font-extrabold text-white">
+            <div className="chat-avatar avatar flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full border-[2.5px] border-white bg-gradient-to-br from-[#0f4f91] via-[#1565C0] to-[#0b3666] text-[14px] font-extrabold text-white sm:h-[38px] sm:w-[38px] sm:text-[15px]">
               S
             </div>
-            <div className="chat-bubble agent max-w-[76%] rounded-[20px] rounded-bl-[4px] px-4 py-3 text-[15px] leading-[1.6] text-slate-900">
+            <div className="chat-bubble agent max-w-[84%] rounded-[20px] rounded-bl-[4px] px-4 py-3 text-[15px] leading-[1.6] text-slate-900 sm:max-w-[76%]">
               <div className="mb-2 text-center text-xl tracking-[0.28em] text-[#0b3666]">
                 🎉 ¡Felicidades! 🎁
               </div>
@@ -71,7 +71,7 @@ export const SecureLifeFinalStep = ({
             type="button"
             onClick={onCall}
             disabled={isCallBlocked || isCheckingStatus}
-            className={`chat-pulse mx-auto mt-4 flex w-full max-w-[360px] items-center justify-center gap-3 rounded-[18px] px-5 py-4 text-[21px] font-extrabold tracking-[0.08em] text-white transition-all duration-300 ${isCallBlocked || isCheckingStatus ? "cursor-not-allowed bg-slate-500" : "bg-gradient-to-r from-[#2E7D32] via-[#35a24a] to-[#1B5E20] hover:scale-[1.015]"}`}
+            className={`chat-pulse mx-auto mt-4 flex w-full max-w-[420px] items-center justify-center gap-3 rounded-[18px] px-5 py-4 text-[clamp(18px,5vw,21px)] font-extrabold tracking-[0.08em] text-white transition-all duration-300 ${isCallBlocked || isCheckingStatus ? "cursor-not-allowed bg-slate-500" : "bg-gradient-to-r from-[#2E7D32] via-[#35a24a] to-[#1B5E20] hover:scale-[1.015]"}`}
           >
             📞 <span>Llamar ahora</span>
           </button>

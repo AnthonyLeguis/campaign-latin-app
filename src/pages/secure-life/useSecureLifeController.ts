@@ -19,6 +19,7 @@ export function useSecureLifeController() {
   const [phoneRaw, setPhoneRaw] = useState("+14696637105");
   const [introAnswer, setIntroAnswer] = useState("");
   const [introDisabled, setIntroDisabled] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   const [showAgeTyping, setShowAgeTyping] = useState(false);
   const [showAgePrompt, setShowAgePrompt] = useState(false);
   const [selectedAge, setSelectedAge] = useState("");
@@ -172,6 +173,10 @@ export function useSecureLifeController() {
     [introDisabled, navigate, schedule],
   );
 
+  const handleStartChat = useCallback(() => {
+    setHasStarted(true);
+  }, []);
+
   const handleAgeChoice = useCallback(
     (age: string) => {
       if (!showAgePrompt || selectedAge) {
@@ -277,8 +282,10 @@ export function useSecureLifeController() {
     handleAgeChoice,
     handleCall,
     handleIntroChoice,
+    handleStartChat,
     introAnswer,
     introDisabled,
+    hasStarted,
     isCallBlocked,
     isCheckingStatus,
     isLoadingLocation,

@@ -8,8 +8,8 @@ export const SecureLifeHeader = ({
   stateDisplay,
 }: SecureLifeHeaderProps) => {
   return (
-    <header className="secure-life-surface mx-auto w-full max-w-[520px] px-4 pt-4 sm:px-5">
-      <div className="secure-life-panel overflow-hidden rounded-[28px] px-5 py-4 sm:px-6 sm:py-5">
+    <header className="secure-life-surface mx-auto w-full max-w-[520px] px-3 pt-3 sm:px-5 sm:pt-4">
+      <div className="secure-life-panel overflow-hidden rounded-[24px] px-4 py-4 sm:rounded-[28px] sm:px-6 sm:py-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#0f4f91] shadow-sm">
