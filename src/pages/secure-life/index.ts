@@ -1,0 +1,1 @@
+export { SecureLifeChatView } from "./SecureLifeChatView";

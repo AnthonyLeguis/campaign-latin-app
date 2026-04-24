@@ -42,10 +42,10 @@ export const LegalView = () => {
         <div className="mt-8 flex justify-center">
           <button
             type="button"
-            onClick={() => navigate("view1")}
+            onClick={() => navigate("secure-life")}
             className="bg-[#084f63] text-white py-2 px-6 rounded-md text-sm font-bold hover:bg-[#0a5f77] transition-colors cursor-pointer"
           >
-            Back to Main Page
+            Volver al chat
           </button>
         </div>
       </div>

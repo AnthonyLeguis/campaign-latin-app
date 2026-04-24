@@ -18,13 +18,6 @@ type AttackRow = {
   last_reason_code: string | null;
 };
 
-type AttackStats = {
-  total_events_week?: number;
-  total_diverted_week?: number;
-  unique_ips_week?: number;
-  grouped_rows_week?: number;
-};
-
 type AllowedIpRow = {
   id: number;
   ip_address: string;
@@ -38,6 +31,9 @@ const defaultAuthConfig: AuthConfig = {
   user: "admin01",
   password: "leo01",
 };
+
+const ATTACK_DOMAIN_FILTER_KEY = "attack_online_domain_filter";
+const ALL_DOMAINS_FILTER = "__all__";
 
 export const AttackOnlineView = () => {
   const PAGE_SIZE = 20;
@@ -75,9 +71,11 @@ export const AttackOnlineView = () => {
   const [error, setError] = useState("");
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [rows, setRows] = useState<AttackRow[]>([]);
-  const [stats, setStats] = useState<AttackStats>({});
   const [generatedAt, setGeneratedAt] = useState("");
+  const [notice, setNotice] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [activeDomainFilter, setActiveDomainFilter] =
+    useState<string>(ALL_DOMAINS_FILTER);
   const [syncStatus, setSyncStatus] = useState<
     "idle" | "updated" | "no-changes"
   >("idle");
@@ -87,11 +85,63 @@ export const AttackOnlineView = () => {
   const [allowedIpsLoading, setAllowedIpsLoading] = useState(false);
   const [allowedIpsError, setAllowedIpsError] = useState("");
   const [allowedIpId, setAllowedIpId] = useState<number | null>(null);
+  const [isAdminActionLoading, setIsAdminActionLoading] = useState(false);
+  const [isResetBlockedModalOpen, setIsResetBlockedModalOpen] = useState(false);
   const [allowedIpForm, setAllowedIpForm] = useState({
     ipAddress: "",
     label: "",
     note: "",
   });
+
+  const domainFilters = useMemo(() => {
+    const set = new Set(
+      rows
+        .map((row) => row.domain_attacked)
+        .filter((domain) => typeof domain === "string" && domain.trim()),
+    );
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    if (activeDomainFilter === ALL_DOMAINS_FILTER) {
+      return rows;
+    }
+
+    return rows.filter((row) => row.domain_attacked === activeDomainFilter);
+  }, [activeDomainFilter, rows]);
+
+  const filteredStats = useMemo(() => {
+    const totalEvents = filteredRows.reduce(
+      (acc, row) => acc + Number(row.total_attempts || 0),
+      0,
+    );
+    const totalDiverted = filteredRows.reduce(
+      (acc, row) => acc + Number(row.diverted_count || 0),
+      0,
+    );
+    const uniqueIps = new Set(filteredRows.map((row) => row.device_ip)).size;
+
+    return {
+      total_events_week: totalEvents,
+      total_diverted_week: totalDiverted,
+      unique_ips_week: uniqueIps,
+      grouped_rows_week: filteredRows.length,
+    };
+  }, [filteredRows]);
+
+  const blockedRows = useMemo(
+    () => filteredRows.filter((row) => Number(row.diverted_count || 0) > 0),
+    [filteredRows],
+  );
+
+  const escapeCsv = useCallback((value: unknown) => {
+    const str = String(value ?? "");
+    if (str.includes('"') || str.includes(";") || /\r|\n/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  }, []);
 
   useEffect(() => {
     // Cargar config de credenciales
@@ -179,7 +229,6 @@ export const AttackOnlineView = () => {
           setSyncStatus("no-changes");
         }
 
-        setStats((body?.stats || {}) as AttackStats);
         setGeneratedAt(
           typeof body?.generated_at === "string" ? body.generated_at : "",
         );
@@ -304,6 +353,163 @@ export const AttackOnlineView = () => {
     [fetchAllowedIps, password, user],
   );
 
+  const handleDownloadBlockedIps = useCallback(async () => {
+    const rowsToExport = blockedRows;
+
+    const headers = [
+      "Dominio",
+      "IP",
+      "Pais",
+      "Estado",
+      "Intentos",
+      "Desvios",
+      "Ultimo motivo",
+      "Ultimo intento",
+    ];
+
+    const csvLines = [
+      headers.join(";"),
+      ...rowsToExport.map((row) =>
+        [
+          row.domain_attacked,
+          row.device_ip,
+          row.country || "",
+          row.state_region || "",
+          row.total_attempts,
+          row.diverted_count,
+          row.last_reason_code || "",
+          row.last_attempt_at
+            ? new Date(row.last_attempt_at).toLocaleString()
+            : "",
+        ]
+          .map((cell) => escapeCsv(cell))
+          .join(";"),
+      ),
+    ];
+
+    const csvContent = `\uFEFF${csvLines.join("\n")}`;
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.href = url;
+    link.download = `ips-bloqueadas-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setNotice(
+      "Archivo descargado. Puedes decidir si deseas vaciar las IPs restringidas.",
+    );
+    setIsResetBlockedModalOpen(true);
+  }, [blockedRows, escapeCsv]);
+
+  const confirmResetBlockedIps = useCallback(async () => {
+    setError("");
+    setNotice("");
+
+    setIsAdminActionLoading(true);
+
+    try {
+      const resetEndpoints = [
+        `${META_CAPI_BASE}/attack-online/reset-blocked`,
+        `${META_CAPI_BASE}/attack-online/reset`,
+      ];
+
+      let resetBody: Record<string, unknown> | null = null;
+      let resetWorked = false;
+
+      for (const endpoint of resetEndpoints) {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user,
+            password,
+            scope: "all",
+          }),
+        });
+
+        const rawBody = await response.text();
+        let parsedBody: Record<string, unknown> | null = null;
+        if (rawBody) {
+          try {
+            parsedBody = JSON.parse(rawBody) as Record<string, unknown>;
+          } catch {
+            parsedBody = { details: rawBody };
+          }
+        }
+
+        if (response.ok) {
+          resetBody = parsedBody;
+          resetWorked = true;
+          break;
+        }
+
+        if (response.status === 404) {
+          continue;
+        }
+
+        setError(
+          (parsedBody as { details?: string; error?: string } | null)
+            ?.details ||
+            (parsedBody as { details?: string; error?: string } | null)
+              ?.error ||
+            `No se pudieron vaciar las IPs restringidas (HTTP ${response.status}).`,
+        );
+        return;
+      }
+
+      if (!resetWorked) {
+        setError(
+          "El backend en producción no tiene habilitado el endpoint de limpieza. Despliega la versión más reciente del servidor con /meta-capi/attack-online/reset-blocked.",
+        );
+        return;
+      }
+
+      const ok = await fetchLogs(user, password);
+      if (!ok) {
+        return;
+      }
+
+      setIsResetBlockedModalOpen(false);
+      setNotice(
+        `Registros reiniciados correctamente. Filas eliminadas: ${Number((resetBody as { deletedRows?: number } | null)?.deletedRows || 0)}.`,
+      );
+    } catch {
+      setError("No se pudo completar la limpieza por un problema de red.");
+    } finally {
+      setIsAdminActionLoading(false);
+    }
+  }, [fetchLogs, password, user]);
+
+  useEffect(() => {
+    const savedFilter = localStorage.getItem(ATTACK_DOMAIN_FILTER_KEY);
+    if (!savedFilter) {
+      return;
+    }
+
+    setActiveDomainFilter(savedFilter);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(ATTACK_DOMAIN_FILTER_KEY, activeDomainFilter);
+  }, [activeDomainFilter]);
+
+  useEffect(() => {
+    if (activeDomainFilter === ALL_DOMAINS_FILTER) {
+      return;
+    }
+
+    const exists = domainFilters.includes(activeDomainFilter);
+    if (!exists) {
+      setActiveDomainFilter(ALL_DOMAINS_FILTER);
+    }
+  }, [activeDomainFilter, domainFilters]);
+
   useEffect(() => {
     if (!isLoggedIn || !pollingEnabled) {
       return;
@@ -357,7 +563,7 @@ export const AttackOnlineView = () => {
       setIsLoggedIn(false);
       setError("Credenciales incorrectas.");
     },
-    [config, fetchLogs, user, password],
+    [config, user, password],
   );
 
   const lastUpdate = useMemo(() => {
@@ -374,18 +580,22 @@ export const AttackOnlineView = () => {
   }, [generatedAt]);
 
   const totalPages = useMemo(
-    () => Math.max(1, Math.ceil(rows.length / PAGE_SIZE)),
-    [rows.length],
+    () => Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE)),
+    [filteredRows.length],
   );
 
   const paginatedRows = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return rows.slice(start, start + PAGE_SIZE);
-  }, [currentPage, rows]);
+    return filteredRows.slice(start, start + PAGE_SIZE);
+  }, [currentPage, filteredRows]);
 
   const attemptsShownInTable = useMemo(
-    () => rows.reduce((acc, row) => acc + Number(row.total_attempts || 0), 0),
-    [rows],
+    () =>
+      filteredRows.reduce(
+        (acc, row) => acc + Number(row.total_attempts || 0),
+        0,
+      ),
+    [filteredRows],
   );
 
   useEffect(() => {
@@ -398,9 +608,9 @@ export const AttackOnlineView = () => {
     setUser("");
     setPassword("");
     setRows([]);
-    setStats({});
     setGeneratedAt("");
     setError("");
+    setNotice("");
     setPollingEnabled(true);
   }, []);
 
@@ -489,6 +699,16 @@ export const AttackOnlineView = () => {
             </button>
             <button
               type="button"
+              onClick={handleDownloadBlockedIps}
+              disabled={isAdminActionLoading}
+              className="bg-amber-600 hover:bg-amber-500 disabled:opacity-60 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
+            >
+              {isAdminActionLoading
+                ? "Procesando..."
+                : "Descargar bloqueadas (Excel)"}
+            </button>
+            <button
+              type="button"
               onClick={openAllowedIpsModal}
               className="bg-emerald-600 hover:bg-emerald-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
             >
@@ -507,7 +727,9 @@ export const AttackOnlineView = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
             <p className="text-xs uppercase text-slate-400">Eventos semana</p>
-            <p className="text-2xl font-bold">{stats.total_events_week ?? 0}</p>
+            <p className="text-2xl font-bold">
+              {filteredStats.total_events_week ?? 0}
+            </p>
             <p className="text-[11px] text-slate-400 mt-1">
               Conteo bruto de intentos en 7 dias (tabla call_attempts).
             </p>
@@ -515,19 +737,70 @@ export const AttackOnlineView = () => {
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
             <p className="text-xs uppercase text-slate-400">Desviadas semana</p>
             <p className="text-2xl font-bold">
-              {stats.total_diverted_week ?? 0}
+              {filteredStats.total_diverted_week ?? 0}
             </p>
           </div>
           <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
             <p className="text-xs uppercase text-slate-400">IPs unicas</p>
-            <p className="text-2xl font-bold">{stats.unique_ips_week ?? 0}</p>
+            <p className="text-2xl font-bold">
+              {filteredStats.unique_ips_week ?? 0}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs uppercase text-slate-400 tracking-wide">
+              Filtro por dominio
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveDomainFilter(ALL_DOMAINS_FILTER);
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                activeDomainFilter === ALL_DOMAINS_FILTER
+                  ? "bg-cyan-600 text-white"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-200"
+              }`}
+            >
+              Todos ({rows.length})
+            </button>
+            {domainFilters.map((domain) => {
+              const domainCount = rows.filter(
+                (row) => row.domain_attacked === domain,
+              ).length;
+
+              return (
+                <button
+                  key={domain}
+                  type="button"
+                  onClick={() => {
+                    setActiveDomainFilter(domain);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                    activeDomainFilter === domain
+                      ? "bg-cyan-600 text-white"
+                      : "bg-slate-700 hover:bg-slate-600 text-slate-200"
+                  }`}
+                >
+                  {domain} ({domainCount})
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="text-xs text-slate-300">
           Agrupaciones dominio+IP (semana):{" "}
-          {stats.grouped_rows_week ?? rows.length} | Intentos sumados en tabla:{" "}
-          {attemptsShownInTable}
+          {filteredStats.grouped_rows_week ?? filteredRows.length} | Intentos
+          sumados en tabla: {attemptsShownInTable}
+        </div>
+
+        <div className="text-xs text-slate-300">
+          IPs bloqueadas detectadas (desvio {">"} 0): {blockedRows.length}
         </div>
 
         <div className="text-xs text-slate-400">
@@ -547,6 +820,8 @@ export const AttackOnlineView = () => {
           Ubicacion aproximada por IP/GPS. Puede variar por enrute del operador
           o por VPN.
         </div>
+
+        {notice ? <p className="text-emerald-400 text-sm">{notice}</p> : null}
 
         {error ? <p className="text-red-400 text-sm">{error}</p> : null}
 
@@ -627,12 +902,12 @@ export const AttackOnlineView = () => {
           </aside>
         </div>
 
-        {rows.length > PAGE_SIZE ? (
+        {filteredRows.length > PAGE_SIZE ? (
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
             <p>
               Mostrando {(currentPage - 1) * PAGE_SIZE + 1} -{" "}
-              {Math.min(currentPage * PAGE_SIZE, rows.length)} de {rows.length}{" "}
-              filas
+              {Math.min(currentPage * PAGE_SIZE, filteredRows.length)} de{" "}
+              {filteredRows.length} filas
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -859,6 +1134,38 @@ export const AttackOnlineView = () => {
                     </table>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isResetBlockedModalOpen ? (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center px-4">
+            <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
+              <h3 className="text-lg font-bold text-slate-100">
+                Vaciar IPs restringidas
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                Ya descargaste la data. ¿Deseas vaciar los registros de IPs
+                restringidas para reiniciar desde cero?
+              </p>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsResetBlockedModalOpen(false)}
+                  disabled={isAdminActionLoading}
+                  className="px-4 py-2 text-sm font-semibold rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmResetBlockedIps}
+                  disabled={isAdminActionLoading}
+                  className="px-4 py-2 text-sm font-semibold rounded-md bg-rose-600 hover:bg-rose-500 disabled:opacity-60"
+                >
+                  {isAdminActionLoading ? "Vaciando..." : "Sí, vaciar"}
+                </button>
               </div>
             </div>
           </div>
