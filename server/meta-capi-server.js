@@ -35,6 +35,7 @@ const HAS_DB_CONFIG = Boolean(
 );
 
 let dbPool;
+let blockedCleanupTimer;
 
 function getDbPool() {
     if (!HAS_DB_CONFIG) {
@@ -202,6 +203,65 @@ async function reserveMetaEventId(pool, eventName, eventId, clientIp) {
 
     const inserted = Number(result?.affectedRows || 0) > 0;
     return { deduped: !inserted };
+}
+
+async function purgeBlockedAttempts(pool) {
+    const [result] = await pool.query(
+        `DELETE FROM call_attempts
+         WHERE call_diverted = 1
+            OR reason_code = 'BLOCKED_ON_ENTRY'`
+    );
+
+    return Number(result?.affectedRows || 0);
+}
+
+function getNextSundayMidnight(referenceDate = new Date()) {
+    const next = new Date(referenceDate);
+    const day = next.getDay();
+    const daysUntilSunday = (7 - day) % 7;
+
+    next.setDate(next.getDate() + daysUntilSunday);
+    next.setHours(0, 0, 0, 0);
+
+    if (next <= referenceDate) {
+        next.setDate(next.getDate() + 7);
+    }
+
+    return next;
+}
+
+function scheduleWeeklyBlockedCleanup() {
+    const pool = getDbPool();
+    if (!pool) {
+        console.warn('[meta-capi-server] Limpieza automática de bloqueados deshabilitada: DB no configurada');
+        return;
+    }
+
+    const scheduleNext = () => {
+        const nextRun = getNextSundayMidnight();
+        const delay = Math.max(1000, nextRun.getTime() - Date.now());
+
+        if (blockedCleanupTimer) {
+            clearTimeout(blockedCleanupTimer);
+        }
+
+        blockedCleanupTimer = setTimeout(async () => {
+            try {
+                const deletedRows = await purgeBlockedAttempts(pool);
+                console.log('[meta-capi-server] ✅ Limpieza automática de bloqueados ejecutada', {
+                    deletedRows,
+                });
+            } catch (error) {
+                console.error('[meta-capi-server] Error en limpieza automática de bloqueados', error);
+            } finally {
+                scheduleNext();
+            }
+        }, delay);
+
+        console.log('[meta-capi-server] Limpieza automática de bloqueados programada para', nextRun.toISOString());
+    };
+
+    scheduleNext();
 }
 
 function normalizePhoneNumber(value) {
@@ -1060,17 +1120,13 @@ app.post('/meta-capi/attack-online/reset-blocked', async (req, res) => {
 
     try {
         const [result] = scope === 'blocked'
-            ? await pool.query(
-                `DELETE FROM call_attempts
-                 WHERE call_diverted = 1
-                    OR reason_code = 'BLOCKED_ON_ENTRY'`
-            )
+            ? [await purgeBlockedAttempts(pool)]
             : await pool.query('DELETE FROM call_attempts');
 
         return res.json({
             status: 'ok',
             scope,
-            deletedRows: Number(result?.affectedRows || 0),
+            deletedRows: scope === 'blocked' ? Number(result || 0) : Number(result?.affectedRows || 0),
         });
     } catch (error) {
         console.error('[meta-capi-server] Error reiniciando registros de bloqueo', error);
@@ -1720,4 +1776,5 @@ async function startupDbCheck() {
 app.listen(port, () => {
     console.log(`[meta-capi-server] Escuchando en http://localhost:${port}`);
     void startupDbCheck();
+    scheduleWeeklyBlockedCleanup();
 });

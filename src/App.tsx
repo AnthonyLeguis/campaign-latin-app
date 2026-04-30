@@ -8,7 +8,6 @@ import { NotAble } from "./pages/NotAble";
 import { LegalView } from "./pages/LegalView";
 import { ViewContainer } from "./components/ViewContainer";
 import { AttackOnlineView } from "./pages/AttackOnlineView";
-import { DataClientsView } from "./pages/DataClientsView";
 
 function App() {
   const { currentView } = useNavigation();
@@ -18,10 +17,6 @@ function App() {
 
   if (normalizedPath === "/attack-online") {
     return <AttackOnlineView />;
-  }
-
-  if (normalizedPath === "/clients-data") {
-    return <DataClientsView />;
   }
 
   return (

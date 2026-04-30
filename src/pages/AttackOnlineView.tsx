@@ -43,15 +43,6 @@ export const AttackOnlineView = () => {
   const PAGE_SIZE = 20;
   const reasonLegend = [
     {
-      code: "FIRST_ATTEMPT",
-      meaning:
-        "Primer intento detectado para esa IP/dispositivo en los ultimos 7 dias.",
-    },
-    {
-      code: "REPEAT_IP",
-      meaning: "Ya existia un intento previo para la misma IP.",
-    },
-    {
       code: "REPEAT_IP_OR_DEVICE",
       meaning:
         "Se detecto repeticion por la misma IP o por el fingerprint del navegador/dispositivo.",
@@ -357,7 +348,7 @@ export const AttackOnlineView = () => {
       setIsLoggedIn(false);
       setError("Credenciales incorrectas.");
     },
-    [config, fetchLogs, user, password],
+    [config, user, password],
   );
 
   const lastUpdate = useMemo(() => {
@@ -477,15 +468,6 @@ export const AttackOnlineView = () => {
                 : pollingEnabled
                   ? "Actualizar"
                   : "Reintentar"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                window.location.assign("/clients-data");
-              }}
-              className="bg-sky-600 hover:bg-sky-500 transition-colors rounded-md px-4 py-2 text-sm font-semibold"
-            >
-              Ver clientes
             </button>
             <button
               type="button"
