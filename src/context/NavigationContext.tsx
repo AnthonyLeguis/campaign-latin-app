@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 
-export type ViewType = "secure-life" | "no" | "legal";
+export type ViewType = "view1" | "view2" | "view3" | "final" | "no" | "legal";
 
 interface NavigationContextType {
   currentView: ViewType;
@@ -19,7 +19,7 @@ interface NavigationProviderProps {
 export const NavigationProvider: React.FC<NavigationProviderProps> = ({
   children,
 }) => {
-  const [currentView, setCurrentView] = useState<ViewType>("secure-life");
+  const [currentView, setCurrentView] = useState<ViewType>("view1");
 
   const navigate = (view: ViewType) => {
     setCurrentView(view);

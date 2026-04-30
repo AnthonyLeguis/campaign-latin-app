@@ -20,7 +20,6 @@ const DEFAULT_LEAD_VALUE = process.env.META_DEFAULT_LEAD_VALUE;
 const DB_HEALTH_TOKEN = process.env.DB_HEALTH_TOKEN;
 const ATTACK_ONLINE_USER = process.env.ATTACK_ONLINE_USER || 'admin01';
 const ATTACK_ONLINE_PASSWORD = process.env.ATTACK_ONLINE_PASSWORD || 'leo01';
-const BLOCKED_CLEANUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const DB_CONFIG = {
     host: process.env.DB_HOST,
@@ -36,7 +35,6 @@ const HAS_DB_CONFIG = Boolean(
 );
 
 let dbPool;
-let blockedCleanupTimeout;
 
 function getDbPool() {
     if (!HAS_DB_CONFIG) {
@@ -204,66 +202,6 @@ async function reserveMetaEventId(pool, eventName, eventId, clientIp) {
 
     const inserted = Number(result?.affectedRows || 0) > 0;
     return { deduped: !inserted };
-}
-
-function getNextUtcSundayMidnight(referenceDate = new Date()) {
-    const nextRun = new Date(referenceDate);
-    const currentDay = nextRun.getUTCDay();
-    const daysUntilSunday = (7 - currentDay) % 7;
-
-    nextRun.setUTCDate(nextRun.getUTCDate() + daysUntilSunday);
-    nextRun.setUTCHours(0, 0, 0, 0);
-
-    if (nextRun <= referenceDate) {
-        nextRun.setUTCDate(nextRun.getUTCDate() + 7);
-    }
-
-    return nextRun;
-}
-
-async function purgeBlockedAttempts(pool) {
-    const [result] = await pool.query(
-        `DELETE FROM call_attempts
-         WHERE call_diverted = 1
-            OR reason_code = 'BLOCKED_ON_ENTRY'`
-    );
-
-    return Number(result?.affectedRows || 0);
-}
-
-function scheduleBlockedCleanup() {
-    const pool = getDbPool();
-    if (!pool) {
-        console.warn('[meta-capi-server] Limpieza semanal de bloqueados deshabilitada: DB no configurada');
-        return;
-    }
-
-    const scheduleNextRun = () => {
-        const nextRunAt = getNextUtcSundayMidnight();
-        const delayMs = Math.max(1000, nextRunAt.getTime() - Date.now());
-
-        if (blockedCleanupTimeout) {
-            clearTimeout(blockedCleanupTimeout);
-        }
-
-        blockedCleanupTimeout = setTimeout(async () => {
-            try {
-                const deletedRows = await purgeBlockedAttempts(pool);
-                console.log('[meta-capi-server] ✅ Limpieza semanal de bloqueados ejecutada', {
-                    deletedRows,
-                    nextRunAt: getNextUtcSundayMidnight(new Date()).toISOString(),
-                });
-            } catch (error) {
-                console.error('[meta-capi-server] Error ejecutando limpieza semanal de bloqueados', error);
-            } finally {
-                scheduleNextRun();
-            }
-        }, delayMs);
-
-        console.log('[meta-capi-server] Limpieza semanal de bloqueados programada para', nextRunAt.toISOString());
-    };
-
-    scheduleNextRun();
 }
 
 function normalizePhoneNumber(value) {
@@ -741,17 +679,21 @@ app.post('/meta-capi/event', async (req, res) => {
                     return res.json({ success: true, meta: body, allowlisted: true });
                 }
 
-                const [attemptCountRows] = await pool.query(
-                    `SELECT COUNT(*) AS attempt_count
+                const [leadAuthRows] = await pool.query(
+                    `SELECT call_diverted, created_at
                      FROM call_attempts
                      WHERE device_ip = ?
-                       AND created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)`,
+                     ORDER BY id DESC
+                     LIMIT 1`,
                     [client_ip_address]
                 );
 
-                const recentAttemptCount = Number(attemptCountRows?.[0]?.attempt_count || 0);
+                const latestAttempt = Array.isArray(leadAuthRows) ? leadAuthRows[0] : null;
+                const isFreshAttempt = latestAttempt?.created_at
+                    ? (Date.now() - new Date(latestAttempt.created_at).getTime()) <= 2 * 60 * 1000
+                    : false;
 
-                if (recentAttemptCount >= 2) {
+                if (!latestAttempt || latestAttempt.call_diverted === 1 || !isFreshAttempt) {
                     return res.status(403).json({
                         error: 'Lead blocked',
                         details: 'Lead rechazado por política anti-abuso.',
@@ -1118,13 +1060,17 @@ app.post('/meta-capi/attack-online/reset-blocked', async (req, res) => {
 
     try {
         const [result] = scope === 'blocked'
-            ? [await purgeBlockedAttempts(pool)]
+            ? await pool.query(
+                `DELETE FROM call_attempts
+                 WHERE call_diverted = 1
+                    OR reason_code = 'BLOCKED_ON_ENTRY'`
+            )
             : await pool.query('DELETE FROM call_attempts');
 
         return res.json({
             status: 'ok',
             scope,
-            deletedRows: scope === 'blocked' ? Number(result || 0) : Number(result?.affectedRows || 0),
+            deletedRows: Number(result?.affectedRows || 0),
         });
     } catch (error) {
         console.error('[meta-capi-server] Error reiniciando registros de bloqueo', error);
@@ -1774,5 +1720,4 @@ async function startupDbCheck() {
 app.listen(port, () => {
     console.log(`[meta-capi-server] Escuchando en http://localhost:${port}`);
     void startupDbCheck();
-    scheduleBlockedCleanup();
 });
